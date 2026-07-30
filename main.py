@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 import asyncio
+import re
 from highrise import BaseBot, User, Position, AnchorPosition
 from highrise.models import SessionMetadata, CurrencyItem
 
@@ -10,12 +11,17 @@ import database as db
 
 db.init_db()
 
+# Guardado en memoria del estado paso a paso para !giftbot
+gift_sessions = {}
+
+
 def deploy_bot_instance(user_id: str, bot_type: str, room_id: str, api_token: str) -> bool:
-    """ Clona la carpeta plantilla del bot e inyecta las credenciales en config.py """
+    """ Clona la plantilla del bot, inyecta credenciales y ejecuta run.py """
     template_path = os.path.join(TEMPLATES_DIR, bot_type.lower())
     instance_path = os.path.join(HOSTED_INSTANCES_DIR, f"user_{user_id}_{bot_type.lower()}")
 
     if not os.path.exists(template_path):
+        print(f"❌ La plantilla '{template_path}' no existe.")
         return False
 
     if os.path.exists(instance_path):
@@ -24,7 +30,7 @@ def deploy_bot_instance(user_id: str, bot_type: str, room_id: str, api_token: st
     shutil.copytree(template_path, instance_path)
 
     config_file_path = os.path.join(instance_path, "config.py")
-    config_content = f"""# CONFIGURACIÓN GENERADA AUTOMÁTICAMENTE
+    config_content = f"""# CONFIGURACIÓN GENERADA AUTOMÁTICAMENTE POR BOT HOSTER
 ROOM_ID = "{room_id}"
 API_TOKEN = "{api_token}"
 BOT_OWNER_ID = "{user_id}"
@@ -34,10 +40,12 @@ HOSTER_OWNER_ID = "{HOSTER_OWNER_ID}"
         f.write(config_content)
 
     try:
-        subprocess.Popen(["highrise", f"{instance_path}/main:Bot", room_id, api_token])
+        run_file_path = os.path.join(instance_path, "run.py")
+        subprocess.Popen(["python", run_file_path])
+        print(f"🟢 Bot de {bot_type} desplegado con éxito para el usuario {user_id}")
         return True
     except Exception as e:
-        print(f"Error al ejecutar bot: {e}")
+        print(f"🔴 Error al ejecutar run.py del bot: {e}")
         return False
 
 
@@ -46,7 +54,9 @@ class BotHoster(BaseBot):
     async def on_start(self, session_metadata: SessionMetadata) -> None:
         print("🤖 Bot Hoster de Nex-Host iniciado y conectado a la sala.")
 
-    # Recarga de saldo por Tips en la sala
+    async def on_user_join(self, user: User, position: Position | AnchorPosition) -> None:
+        db.get_or_create_user(user.id, user.username)
+
     async def on_tip_reaction(self, sender: User, receiver: User, tip: CurrencyItem) -> None:
         if receiver.id == self.session_metadata.user_id:
             db.update_gold(sender.id, tip.amount)
@@ -55,10 +65,9 @@ class BotHoster(BaseBot):
                 sender.id,
                 f"💰 ¡Gracias por tu depósito! Recibidos {tip.amount} 🪙.\n"
                 f"Tu saldo acumulado es de: {user_data['balance']} 🪙.\n"
-                f"Revisa tu Inbox para ver el menú o usa '!plan'."
+                f"Revisa tu Inbox para ver el menú o escribe '!plan'."
             )
 
-    # Copiar outfit (Whisper en Sala exclusivo para el Propietario)
     async def on_whisper(self, user: User, message: str) -> None:
         if user.id == HOSTER_OWNER_ID and message.strip().lower() == "!copy":
             try:
@@ -69,7 +78,6 @@ class BotHoster(BaseBot):
             except Exception as e:
                 await self.highrise.send_whisper(user.id, f"❌ Error al copiar outfit: {e}")
 
-    # Atención Principal por INBOX (Mensajes Directos)
     async def on_message(self, user_id: str, conversation_id: str, is_new_conversation: bool) -> None:
         if user_id == self.session_metadata.user_id:
             return
@@ -77,55 +85,146 @@ class BotHoster(BaseBot):
         user_data = db.get_or_create_user(user_id)
         user_bots = db.get_user_bots(user_id)
 
-        # Regalo pendiente
         if user_data["gift_from"]:
             await self.highrise.send_message(
                 conversation_id,
-                f"🎁 ¡Tienes un regalo pendiente! El usuario {user_data['gift_from']} te transfirió saldo.\n"
-                f"Tu saldo actual es de: {user_data['balance']} 🪙."
+                f"🎁 ¡Tienes un aviso! El usuario {user_data['gift_from']} te ha otorgado un beneficio/saldo."
             )
             db.clear_pending_gift(user_id)
 
         menu = f"👋 ¡Hola! Bienvenido al Servicio de Hosting Bot (Nex-Host).\n\n"
-        menu += f"💰 **Tu Saldo:** {user_data['balance']} 🪙\n"
-        
-        if not user_data["free_trial"]:
-            menu += "🎁 ¡Tienes disponible 1 Prueba Gratuita!\n"
-
-        menu += "\n📋 **Menú de Comandos:**\n"
+        menu += f"💰 **Tu Saldo:** {user_data['balance']} 🪙\n\n"
+        menu += "📋 **Menú de Comandos:**\n"
         menu += "🔹 `!menu` - Mostrar este menú\n"
         menu += "🔹 `!saldo` - Consultar balance\n"
         menu += "🔹 `!plan` - Ver categorías y precios\n"
-        
-        if not user_data["free_trial"]:
-            menu += "🔹 `!free <CATEGORIA> <TOKEN> <ROOM_ID>` - Activar prueba gratis\n"
-            
         menu += "🔹 `!buy <CATEGORIA> <TOKEN> <ROOM_ID>` - Comprar bot\n"
         menu += "🔹 `!gift <ID_USUARIO> <MONTO>` - Regalar saldo\n"
 
-        # Lógica: Si el usuario tiene un solo bot, no se muestra lista, solo el estado directo
         if len(user_bots) == 1:
-            b_id, r_id, st, cat = user_bots[0]
-            menu += f"\n🤖 **Tu Bot:** ID `{b_id}` | Tipo: `{cat}` | Sala: `{r_id}` | Estado: `{st}`\n"
+            b_id, r_id, st, cat, exp = user_bots[0]
+            exp_info = f" (Expira: {exp})" if exp else " (Permanente)"
+            menu += f"\n🤖 **Tu Bot:** ID `{b_id}` | Tipo: `{cat}` | Sala: `{r_id}` | Estado: `{st}`{exp_info}\n"
         elif len(user_bots) > 1:
             menu += f"\n🤖 Tienes {len(user_bots)} bots registrados. Usa `!mybots` para ver la lista.\n"
 
         if user_id == HOSTER_OWNER_ID:
-            menu += "\n👑 **Panel Admin:** `!addgold`, `!mantenimiento`, `!detener`, `!activar`"
+            menu += "\n👑 **Panel Admin:**\n"
+            menu += "• `!giftbot` - Regalar bot paso a paso (ej: 15m, 3h, 30d)\n"
+            menu += "• `!cancel` - Cancelar el proceso paso a paso\n"
+            menu += "• `!addgold <USER_ID> <CANTIDAD>`\n"
+            menu += "• `!mantenimiento <CAT> <on/off>`\n"
+            menu += "• `!detener / !activar <CAT>`"
 
         await self.highrise.send_message(conversation_id, menu)
 
-    # Procesamiento de comandos por Inbox
     async def on_message_response(self, user_id: str, conversation_id: str, message: str) -> None:
-        parts = message.strip().split()
-        if not parts:
+        text = message.strip()
+        if not text:
             return
 
+        parts = text.split()
         cmd = parts[0].lower()
         user_data = db.get_or_create_user(user_id)
 
-        if cmd in ["!saldo", "!balance"]:
-            await self.highrise.send_message(conversation_id, f"💰 Tu saldo acumulado es: {user_data['balance']} 🪙.")
+        # -----------------------------------------------------
+        # FLUJO PASO A PASO EXCLUSIVO DEL PROPIETARIO (!giftbot)
+        # -----------------------------------------------------
+        if user_id == HOSTER_OWNER_ID and user_id in gift_sessions:
+            if cmd == "!cancel":
+                del gift_sessions[user_id]
+                await self.highrise.send_message(conversation_id, "🚫 Proceso de regalar bot cancelado.")
+                return
+
+            step = gift_sessions[user_id]["step"]
+
+            if step == 1:
+                gift_sessions[user_id]["target_user"] = text
+                gift_sessions[user_id]["step"] = 2
+                await self.highrise.send_message(conversation_id, "2️⃣ Escribe la **Categoría** del bot (ej: musica, fiesta):")
+                return
+
+            elif step == 2:
+                gift_sessions[user_id]["category"] = text.lower()
+                gift_sessions[user_id]["step"] = 3
+                await self.highrise.send_message(conversation_id, "3️⃣ Envía el **Token** del bot:")
+                return
+
+            elif step == 3:
+                gift_sessions[user_id]["token"] = text
+                gift_sessions[user_id]["step"] = 4
+                await self.highrise.send_message(conversation_id, "4️⃣ Envía la **ID de la Sala** (Room ID):")
+                return
+
+            elif step == 4:
+                gift_sessions[user_id]["room_id"] = text
+                gift_sessions[user_id]["step"] = 5
+                await self.highrise.send_message(
+                    conversation_id, 
+                    "5️⃣ Escribe el **Tiempo libre** que quieras darles:\n"
+                    "👉 Usa la cantidad que quieras seguida de 'm', 'h' o 'd' (Ejemplos: `15m`, `45m`, `3h`, `10d`):"
+                )
+                return
+
+            elif step == 5:
+                duration = text.lower().strip()
+                if not re.match(r"^(\d+)([mhd])$", duration):
+                    await self.highrise.send_message(
+                        conversation_id, 
+                        "⚠️ Formato inválido. Ingresa la cantidad que quieras seguida de m, h o d.\n"
+                        "Ejemplos válidos: `15m`, `40m`, `5h`, `12d`.\n"
+                        "Inténtalo de nuevo:"
+                    )
+                    return
+                
+                data = gift_sessions[user_id]
+                
+                success = deploy_bot_instance(data["target_user"], data["category"], data["room_id"], data["token"])
+                if success:
+                    bot_id, exp_date = db.create_bot_entry(
+                        data["target_user"], 
+                        data["category"], 
+                        data["room_id"], 
+                        data["token"], 
+                        duration_str=duration
+                    )
+                    db.set_pending_gift(data["target_user"], "Propietario (Bot de Regalo)")
+                    
+                    await self.highrise.send_message(
+                        conversation_id,
+                        f"🎉 ¡Instancia regalada con éxito!\n\n"
+                        f"👤 Usuario: `{data['target_user']}`\n"
+                        f"🤖 Bot ID: `{bot_id}`\n"
+                        f"⏱️ Tiempo asignado: `{duration}`\n"
+                        f"📅 Expiración: `{exp_date}` UTC"
+                    )
+                else:
+                    await self.highrise.send_message(conversation_id, "❌ Error al desplegar la plantilla. Revisa la categoría.")
+                
+                del gift_sessions[user_id]
+                return
+
+        # -----------------------------------------------------
+        # COMANDOS NORMALES
+        # -----------------------------------------------------
+        if cmd == "!giftbot" and user_id == HOSTER_OWNER_ID:
+            gift_sessions[user_id] = {"step": 1}
+            await self.highrise.send_message(
+                conversation_id, 
+                "🎁 **Iniciando Asistente para Regalar Bot:**\n\n"
+                "1️⃣ Envía la **ID del usuario** que recibirá el regalo:\n"
+                "(Escribe `!cancel` en cualquier momento para salir)"
+            )
+            return
+
+        elif cmd == "!menu":
+            await self.on_message(user_id, conversation_id, False)
+
+        elif cmd in ["!saldo", "!balance"]:
+            await self.highrise.send_message(
+                conversation_id, 
+                f"👤 **Usuario ID:** `{user_id}`\n💰 **Saldo actual:** {user_data['balance']} 🪙."
+            )
 
         elif cmd == "!plan":
             msg_plan = (
@@ -134,71 +233,68 @@ class BotHoster(BaseBot):
                 "[2] 🎮 JUEGOS (Contactar @_Kmi.77)\n"
                 "[3] 🎉 FIESTA\n"
                 "[4] ⚙️ PERSONALIZADO (Contactar @_Kmi.77)\n\n"
-                "Escribe '!plan 1' o '!plan 3' para ver precios."
+                "✍️ Responde '!plan 1' o '!plan 3' para ver precios."
             )
             await self.highrise.send_message(conversation_id, msg_plan)
 
         elif cmd == "!plan 1":
             info = db.get_category_info("musica")
-            if not info["active"]:
-                await self.highrise.send_message(conversation_id, "🛑 El servicio de MÚSICA está deshabilitado.")
-                return
-            if info["maintenance"]:
-                await self.highrise.send_message(conversation_id, "🛠️ La categoría MÚSICA está en mantenimiento.")
-                return
-            await self.highrise.send_message(conversation_id, "🎵 **MÚSICA:** Plan Base: 500 🪙.\nUsa: `!buy musica <TOKEN> <ROOM_ID>`")
-
-        elif cmd == "!free":
-            if user_data["free_trial"]:
-                await self.highrise.send_message(conversation_id, "❌ Ya has utilizado tu prueba gratuita anteriormente.")
-                return
-            if len(parts) < 4:
-                await self.highrise.send_message(conversation_id, "⚠️ Uso: `!free <musica/fiesta> <TOKEN> <ROOM_ID>`")
-                return
-
-            cat, token, room_id = parts[1].lower(), parts[2], parts[3]
-            info = db.get_category_info(cat)
             if not info["active"] or info["maintenance"]:
-                await self.highrise.send_message(conversation_id, f"🛑 La categoría {cat} no está disponible actualmente.")
+                await self.highrise.send_message(conversation_id, "🛑 La categoría MÚSICA no está disponible temporalmente.")
                 return
+            await self.highrise.send_message(
+                conversation_id, 
+                "🎵 **CATEGORÍA MÚSICA:**\n• Plan Base: 500 🪙\n\nComprar: `!buy musica <TOKEN> <ROOM_ID>`"
+            )
 
-            success = deploy_bot_instance(user_id, cat, room_id, token)
-            if success:
-                db.mark_free_trial_used(user_id)
-                bot_id = db.create_bot_entry(user_id, cat, room_id, token)
-                await self.highrise.send_message(
-                    conversation_id,
-                    f"🎉 ¡Prueba gratis activada!\n🤖 Bot ID: `{bot_id}`.\n\n"
-                    f"⚠️ **RECORDATORIO OBLIGATORIO:** Asigna permisos de MODERADOR 🛡️ y DISEÑADOR 🎨 a la cuenta del bot en tu sala para permitir su ingreso mediante el SDK."
-                )
-            else:
-                await self.highrise.send_message(conversation_id, "❌ Error al desplegar la plantilla del bot.")
+        elif cmd == "!plan 3":
+            info = db.get_category_info("fiesta")
+            if not info["active"] or info["maintenance"]:
+                await self.highrise.send_message(conversation_id, "🛑 La categoría FIESTA no está disponible temporalmente.")
+                return
+            await self.highrise.send_message(
+                conversation_id, 
+                "🎉 **CATEGORÍA FIESTA:**\n• Plan Base: 300 🪙\n\nComprar: `!buy fiesta <TOKEN> <ROOM_ID>`"
+            )
 
         elif cmd == "!buy":
             if len(parts) < 4:
-                await self.highrise.send_message(conversation_id, "⚠️ Uso: `!buy <musica/fiesta> <TOKEN> <ROOM_ID>`")
+                await self.highrise.send_message(conversation_id, "⚠️ Uso correcto: `!buy <CATEGORIA> <TOKEN> <ROOM_ID>`")
                 return
+
             cat, token, room_id = parts[1].lower(), parts[2], parts[3]
             price = 500
+
             if user_data["balance"] < price:
                 missing = price - user_data["balance"]
-                await self.highrise.send_message(conversation_id, f"🛑 Saldo insuficiente. Te faltan {missing} 🪙. Envíalos en la sala.")
+                await self.highrise.send_message(conversation_id, f"🛑 Saldo insuficiente. Te faltan {missing} 🪙.")
                 return
 
             info = db.get_category_info(cat)
             if not info["active"] or info["maintenance"]:
-                await self.highrise.send_message(conversation_id, f"🛑 La categoría {cat} no está disponible actualmente.")
+                await self.highrise.send_message(conversation_id, f"🛑 La categoría '{cat}' no está disponible.")
                 return
 
             success = deploy_bot_instance(user_id, cat, room_id, token)
             if success:
                 db.update_gold(user_id, -price)
-                bot_id = db.create_bot_entry(user_id, cat, room_id, token)
+                bot_id, _ = db.create_bot_entry(user_id, cat, room_id, token)
                 await self.highrise.send_message(
                     conversation_id,
-                    f"✅ ¡Bot comprado y desplegado!\n🤖 ID: `{bot_id}`.\n\n"
-                    f"⚠️ **RECORDATORIO OBLIGATORIO:** Asigna permisos de MODERADOR 🛡️ y DISEÑADOR 🎨 a la cuenta del bot en la sala `{room_id}` para permitir su ingreso mediante el SDK."
+                    f"✅ ¡Bot comprado y desplegado con éxito!\n🤖 ID: `{bot_id}`.\n\n"
+                    f"⚠️ Asigna permisos de MODERADOR 🛡️ y DISEÑADOR 🎨 al bot en la sala `{room_id}`."
                 )
+
+        elif cmd == "!mybots":
+            user_bots = db.get_user_bots(user_id)
+            if not user_bots:
+                await self.highrise.send_message(conversation_id, "ℹ️ No tienes ningún bot alojado.")
+            else:
+                msg = "🤖 **Tus Bots Alojados:**\n"
+                for b_id, r_id, st, cat, exp in user_bots:
+                    exp_info = f" | Expira: `{exp}`" if exp else " | Permanente"
+                    msg += f"• ID `{b_id}` | Tipo: `{cat}` | Sala: `{r_id}` | Estado: `{st}`{exp_info}\n"
+                await self.highrise.send_message(conversation_id, msg)
 
         elif cmd == "!gift":
             if len(parts) == 3 and parts[2].isdigit():
@@ -209,18 +305,17 @@ class BotHoster(BaseBot):
                     db.update_gold(user_id, -amount)
                     db.update_gold(target_id, amount)
                     db.set_pending_gift(target_id, f"@{user_id}")
-                    await self.highrise.send_message(conversation_id, f"✅ Has regalado {amount} 🪙 a la ID `{target_id}`.")
+                    await self.highrise.send_message(conversation_id, f"✅ Has regalado {amount} 🪙 a `{target_id}`.")
 
-        # --- COMANDOS DE CONTROL DE PROPIETARIO ---
         elif cmd == "!addgold" and user_id == HOSTER_OWNER_ID:
             if len(parts) == 3 and parts[2].isdigit():
                 db.update_gold(parts[1], int(parts[2]))
-                await self.highrise.send_message(conversation_id, f"✅ Añadidos {parts[2]} 🪙 a la ID `{parts[1]}`.")
+                await self.highrise.send_message(conversation_id, f"✅ Añadidos {parts[2]} 🪙 a `{parts[1]}`.")
 
         elif cmd == "!mantenimiento" and user_id == HOSTER_OWNER_ID:
             if len(parts) == 3 and parts[2] in ["on", "off"]:
                 db.set_maintenance(parts[1], 1 if parts[2] == "on" else 0)
-                await self.highrise.send_message(conversation_id, f"✅ Mantenimiento de '{parts[1]}' actualizado.")
+                await self.highrise.send_message(conversation_id, f"✅ Mantenimiento de '{parts[1]}' a {parts[2]}.")
 
         elif cmd in ["!detener", "!activar"] and user_id == HOSTER_OWNER_ID:
             if len(parts) == 2:
