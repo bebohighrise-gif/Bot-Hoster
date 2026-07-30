@@ -1,4 +1,6 @@
 import sqlite3
+import re
+from datetime import datetime, timedelta
 from config import DB_NAME
 
 def get_connection():
@@ -14,7 +16,6 @@ def init_db():
             user_id TEXT PRIMARY KEY,
             username TEXT,
             gold_balance INTEGER DEFAULT 0,
-            used_free_trial INTEGER DEFAULT 0,
             pending_gift_from TEXT DEFAULT NULL
         )
     """)
@@ -28,7 +29,7 @@ def init_db():
         )
     """)
     
-    # Bots Alojados
+    # Bots Alojados (Expiración en fecha ISO)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS hosted_bots (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,7 +37,8 @@ def init_db():
             category TEXT,
             room_id TEXT,
             api_token TEXT,
-            status TEXT DEFAULT 'stopped'
+            status TEXT DEFAULT 'stopped',
+            expires_at TEXT DEFAULT NULL
         )
     """)
     
@@ -50,17 +52,17 @@ def init_db():
 def get_or_create_user(user_id: str, username: str = "Usuario"):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT gold_balance, used_free_trial, pending_gift_from FROM users WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT gold_balance, pending_gift_from FROM users WHERE user_id = ?", (user_id,))
     row = cursor.fetchone()
     
     if not row:
-        cursor.execute("INSERT INTO users (user_id, username, gold_balance, used_free_trial) VALUES (?, ?, 0, 0)", (user_id, username))
+        cursor.execute("INSERT INTO users (user_id, username, gold_balance) VALUES (?, ?, 0)", (user_id, username))
         conn.commit()
         conn.close()
-        return {"balance": 0, "free_trial": False, "gift_from": None}
+        return {"balance": 0, "gift_from": None}
         
     conn.close()
-    return {"balance": row[0], "free_trial": bool(row[1]), "gift_from": row[2]}
+    return {"balance": row[0], "gift_from": row[1]}
 
 def update_gold(user_id: str, amount: int):
     conn = get_connection()
@@ -69,13 +71,6 @@ def update_gold(user_id: str, amount: int):
         INSERT INTO users (user_id, gold_balance) VALUES (?, ?)
         ON CONFLICT(user_id) DO UPDATE SET gold_balance = gold_balance + ?
     """, (user_id, amount, amount))
-    conn.commit()
-    conn.close()
-
-def mark_free_trial_used(user_id: str):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET used_free_trial = 1 WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
 
@@ -99,22 +94,48 @@ def set_pending_gift(target_id: str, sender_name: str):
 def get_user_bots(user_id: str):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, room_id, status, category FROM hosted_bots WHERE owner_id = ?", (user_id,))
+    cursor.execute("SELECT id, room_id, status, category, expires_at FROM hosted_bots WHERE owner_id = ?", (user_id,))
     rows = cursor.fetchall()
     conn.close()
     return rows
 
-def create_bot_entry(owner_id: str, category: str, room_id: str, api_token: str):
+def create_bot_entry(owner_id: str, category: str, room_id: str, api_token: str, duration_str: str = None):
+    """
+    Soporta cualquier tiempo dinámico ingresado:
+    - Minutos: "15m", "45m", "120m"...
+    - Horas:   "1h", "6h", "36h"...
+    - Días:    "1d", "15d", "90d"...
+    """
     conn = get_connection()
     cursor = conn.cursor()
+    
+    expires_at = None
+    if duration_str:
+        duration_str = duration_str.lower().strip()
+        match = re.match(r"^(\d+)([mhd])$", duration_str)
+        
+        if match:
+            value = int(match.group(1))
+            unit = match.group(2)
+            
+            now = datetime.utcnow()
+            if unit == 'm':
+                expiration_date = now + timedelta(minutes=value)
+            elif unit == 'h':
+                expiration_date = now + timedelta(hours=value)
+            elif unit == 'd':
+                expiration_date = now + timedelta(days=value)
+                
+            expires_at = expiration_date.strftime("%Y-%m-%d %H:%M:%S")
+
     cursor.execute("""
-        INSERT INTO hosted_bots (owner_id, category, room_id, api_token, status)
-        VALUES (?, ?, ?, ?, 'active')
-    """, (owner_id, category, room_id, api_token))
+        INSERT INTO hosted_bots (owner_id, category, room_id, api_token, status, expires_at)
+        VALUES (?, ?, ?, ?, 'active', ?)
+    """, (owner_id, category, room_id, api_token, expires_at))
     bot_id = cursor.lastrowid
     conn.commit()
     conn.close()
-    return bot_id
+    return bot_id, expires_at
 
 def set_maintenance(category: str, state: int):
     conn = get_connection()
@@ -139,4 +160,4 @@ def get_category_info(category: str):
     if row:
         return {"active": bool(row[0]), "maintenance": bool(row[1])}
     return {"active": True, "maintenance": False}
-  
+            
