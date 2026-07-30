@@ -1,0 +1,9 @@
+# SDK Oficial de Highrise
+highrise-bot-sdk>=23.1.0
+
+# Gestión de solicitudes HTTP y APIs (para descargas o endpoints)
+requests>=2.31.0
+aiohttp>=3.9.0
+
+# Base de datos y utilidades de fecha/tiempo (incorporadas en Python, pero recomendadas para entornos virtuales)
+python-dateutil>=2.8.2
