@@ -1,0 +1,60 @@
+{
+    "api_token": "dee56b9d3c1725b0a1ac967ba95b71b7d5cb7c2cc95da325731778f24c7f0e51",
+    "room_id": "6391221508e102aca8c4ba02",
+    "owner_id": "638cc91171b5ff019d31ffbf",
+    "admin_ids": [
+        "64dc252537db1cdb8e202d8d"
+    ],
+    "moderator_ids": [],
+    "vip_zone": {
+        "x": 16.0,
+        "y": 17.0,
+        "z": 19.0
+    },
+    "dj_zone": {
+        "x": 15.5,
+        "y": 16.0,
+        "z": 2.5
+    },
+    "directivo_zone": {
+        "x": 5.0,
+        "y": 17.5,
+        "z": 4.5
+    },
+    "forbidden_zones": [
+        {
+            "x": 10,
+            "y": 0,
+            "z": 10,
+            "radius": 3
+        },
+        {
+            "x": -10,
+            "y": 0,
+            "z": -10,
+            "radius": 3
+        }
+    ],
+    "bot_wallet": 1000,
+    "announcement_interval": 300,
+    "bot_initial_outfit": "custom_default",
+    "bot_initial_emote": "dance-orangejustice",
+    "bot_id": "694c37fcb3a6081eecdd9d34",
+    "spawn_point": {
+        "x": 9.5,
+        "y": 4.25,
+        "z": 23.5
+    },
+    "password": "070927",
+    "creator": {
+        "name": "Kmi.77",
+        "username": "_Kmi.77",
+        "profile_url": "https://high.rs/user?name=_Kmi.77",
+        "services": [
+            "Páginas Web Profesionales",
+            "Bots de Highrise Personalizados",
+            "Emisoras de Streaming",
+            "Y mucho más..."
+        ]
+    }
+}
