@@ -17,14 +17,6 @@ gift_sessions = {}
 # Procesos activos en esta sesión: {bot_id: subprocess.Popen}
 running_processes = {}
 
-# Precio por categoría (en oro)
-CATEGORY_PRICES = {
-    "musica": 500,
-    "fiesta": 300,
-    "juegos": 500,
-    "personalizado": 500,
-}
-
 
 def template_exists(bot_type: str) -> bool:
     """Verifica si la carpeta de plantilla existe y tiene archivos."""
@@ -33,15 +25,13 @@ def template_exists(bot_type: str) -> bool:
 
 
 def deploy_bot_instance(user_id: str, bot_type: str, room_id: str, api_token: str):
-    """Clona la plantilla del bot, inyecta credenciales y ejecuta run.py.
-    Devuelve (True, proceso) en éxito o (False, None) en error.
-    """
+    """ Clona la plantilla del bot, inyecta credenciales y ejecuta run.py """
     template_path = os.path.join(TEMPLATES_DIR, bot_type.lower())
     instance_path = os.path.join(HOSTED_INSTANCES_DIR, f"user_{user_id}_{bot_type.lower()}")
 
     if not os.path.exists(template_path):
         print(f"❌ La plantilla '{template_path}' no existe.")
-        return False, None
+        return False
 
     if os.path.exists(instance_path):
         shutil.rmtree(instance_path)
@@ -72,20 +62,12 @@ class BotHoster(BaseBot):
 
     async def on_start(self, session_metadata: SessionMetadata) -> None:
         print("🤖 Bot Hoster de Nex-Host iniciado y conectado a la sala.")
-
         # Auto-mantenimiento para categorías sin plantilla
         for cat in ["musica", "fiesta", "juegos", "personalizado"]:
             if not template_exists(cat):
                 db.set_maintenance(cat, 1)
-                print(f"⚠️  Categoría '{cat}' puesta en mantenimiento automático (sin plantilla).")
-            else:
-                # Si antes estaba en mantenimiento automático y ahora hay plantilla, quitarlo
-                info = db.get_category_info(cat)
-                if info["maintenance"]:
-                    db.set_maintenance(cat, 0)
-                    print(f"✅ Categoría '{cat}' restaurada (plantilla encontrada).")
-
-        # Lanzar verificador de bots expirados en segundo plano
+                print(f"⚠️  Categoría '{cat}' en mantenimiento (sin plantilla).")
+        # Verificador de bots expirados en segundo plano
         asyncio.create_task(self._expiration_loop())
 
     async def _expiration_loop(self) -> None:
@@ -95,11 +77,10 @@ class BotHoster(BaseBot):
             try:
                 expired = db.get_expired_bots()
                 for bot_id, owner_id, category in expired:
-                    # Intentar terminar el proceso si está en memoria
                     proc = running_processes.pop(bot_id, None)
                     if proc and proc.poll() is None:
                         proc.terminate()
-                        print(f"🛑 Bot ID {bot_id} ({category}) de usuario {owner_id} terminado por expiración.")
+                        print(f"🛑 Bot ID {bot_id} ({category}) de {owner_id} terminado por expiración.")
                     db.mark_bot_expired(bot_id)
                     print(f"⏰ Bot ID {bot_id} marcado como expirado.")
             except Exception as e:
@@ -211,7 +192,7 @@ class BotHoster(BaseBot):
                 gift_sessions[user_id]["room_id"] = text
                 gift_sessions[user_id]["step"] = 5
                 await self.highrise.send_message(
-                    conversation_id,
+                    conversation_id, 
                     "5️⃣ Escribe el **Tiempo libre** que quieras darles:\n"
                     "👉 Usa la cantidad que quieras seguida de 'm', 'h' o 'd' (Ejemplos: `15m`, `45m`, `3h`, `10d`):"
                 )
@@ -221,28 +202,28 @@ class BotHoster(BaseBot):
                 duration = text.lower().strip()
                 if not re.match(r"^(\d+)([mhd])$", duration):
                     await self.highrise.send_message(
-                        conversation_id,
+                        conversation_id, 
                         "⚠️ Formato inválido. Ingresa la cantidad que quieras seguida de m, h o d.\n"
                         "Ejemplos válidos: `15m`, `40m`, `5h`, `12d`.\n"
                         "Inténtalo de nuevo:"
                     )
                     return
-
+                
                 data = gift_sessions[user_id]
-
+                
                 success, proc = deploy_bot_instance(data["target_user"], data["category"], data["room_id"], data["token"])
                 if success:
                     bot_id, exp_date = db.create_bot_entry(
-                        data["target_user"],
-                        data["category"],
-                        data["room_id"],
-                        data["token"],
+                        data["target_user"], 
+                        data["category"], 
+                        data["room_id"], 
+                        data["token"], 
                         duration_str=duration
                     )
                     if proc:
                         running_processes[bot_id] = proc
                     db.set_pending_gift(data["target_user"], "Propietario (Bot de Regalo)")
-
+                    
                     await self.highrise.send_message(
                         conversation_id,
                         f"🎉 ¡Instancia regalada con éxito!\n\n"
@@ -253,7 +234,7 @@ class BotHoster(BaseBot):
                     )
                 else:
                     await self.highrise.send_message(conversation_id, "❌ Error al desplegar la plantilla. Revisa la categoría.")
-
+                
                 del gift_sessions[user_id]
                 return
 
@@ -263,7 +244,7 @@ class BotHoster(BaseBot):
         if cmd == "!giftbot" and user_id == HOSTER_OWNER_ID:
             gift_sessions[user_id] = {"step": 1}
             await self.highrise.send_message(
-                conversation_id,
+                conversation_id, 
                 "🎁 **Iniciando Asistente para Regalar Bot:**\n\n"
                 "1️⃣ Envía la **ID del usuario** que recibirá el regalo:\n"
                 "(Escribe `!cancel` en cualquier momento para salir)"
@@ -275,46 +256,40 @@ class BotHoster(BaseBot):
 
         elif cmd in ["!saldo", "!balance"]:
             await self.highrise.send_message(
-                conversation_id,
+                conversation_id, 
                 f"👤 **Usuario ID:** `{user_id}`\n💰 **Saldo actual:** {user_data['balance']} 🪙."
             )
 
         elif cmd == "!plan":
-            # Sin subcomando: mostrar categorías
-            if len(parts) == 1:
-                msg_plan = (
-                    "🤖 **SELECCIONA EL TIPO DE BOT:**\n\n"
-                    "[1] 🎵 MÚSICA\n"
-                    "[2] 🎮 JUEGOS (Contactar @_Kmi.77)\n"
-                    "[3] 🎉 FIESTA\n"
-                    "[4] ⚙️ PERSONALIZADO (Contactar @_Kmi.77)\n\n"
-                    "✍️ Responde '!plan 1' o '!plan 3' para ver precios."
-                )
-                await self.highrise.send_message(conversation_id, msg_plan)
+            msg_plan = (
+                "🤖 **SELECCIONA EL TIPO DE BOT:**\n\n"
+                "[1] 🎵 MÚSICA\n"
+                "[2] 🎮 JUEGOS (Contactar @_Kmi.77)\n"
+                "[3] 🎉 FIESTA\n"
+                "[4] ⚙️ PERSONALIZADO (Contactar @_Kmi.77)\n\n"
+                "✍️ Responde '!plan 1' o '!plan 3' para ver precios."
+            )
+            await self.highrise.send_message(conversation_id, msg_plan)
 
-            # !plan 1 → Música
-            elif len(parts) >= 2 and parts[1] == "1":
-                info = db.get_category_info("musica")
-                if not info["active"] or info["maintenance"]:
-                    await self.highrise.send_message(conversation_id, "🛑 La categoría MÚSICA no está disponible temporalmente.")
-                    return
-                precio = CATEGORY_PRICES.get("musica", 500)
-                await self.highrise.send_message(
-                    conversation_id,
-                    f"🎵 **CATEGORÍA MÚSICA:**\n• Plan Base: {precio} 🪙\n\nComprar: `!buy musica <TOKEN> <ROOM_ID>`"
-                )
+        elif cmd == "!plan" and len(parts) >= 2 and parts[1] == "1":
+            info = db.get_category_info("musica")
+            if not info["active"] or info["maintenance"]:
+                await self.highrise.send_message(conversation_id, "🛑 La categoría MÚSICA no está disponible temporalmente.")
+                return
+            await self.highrise.send_message(
+                conversation_id, 
+                "🎵 **CATEGORÍA MÚSICA:**\n• Plan Base: 500 🪙\n\nComprar: `!buy musica <TOKEN> <ROOM_ID>`"
+            )
 
-            # !plan 3 → Fiesta
-            elif len(parts) >= 2 and parts[1] == "3":
-                info = db.get_category_info("fiesta")
-                if not info["active"] or info["maintenance"]:
-                    await self.highrise.send_message(conversation_id, "🛑 La categoría FIESTA no está disponible temporalmente.")
-                    return
-                precio = CATEGORY_PRICES.get("fiesta", 300)
-                await self.highrise.send_message(
-                    conversation_id,
-                    f"🎉 **CATEGORÍA FIESTA:**\n• Plan Base: {precio} 🪙\n\nComprar: `!buy fiesta <TOKEN> <ROOM_ID>`"
-                )
+        elif cmd == "!plan" and len(parts) >= 2 and parts[1] == "3":
+            info = db.get_category_info("fiesta")
+            if not info["active"] or info["maintenance"]:
+                await self.highrise.send_message(conversation_id, "🛑 La categoría FIESTA no está disponible temporalmente.")
+                return
+            await self.highrise.send_message(
+                conversation_id, 
+                "🎉 **CATEGORÍA FIESTA:**\n• Plan Base: 300 🪙\n\nComprar: `!buy fiesta <TOKEN> <ROOM_ID>`"
+            )
 
         elif cmd == "!buy":
             if len(parts) < 4:
@@ -322,7 +297,7 @@ class BotHoster(BaseBot):
                 return
 
             cat, token, room_id = parts[1].lower(), parts[2], parts[3]
-            price = CATEGORY_PRICES.get(cat, 500)
+            price = 500
 
             if user_data["balance"] < price:
                 missing = price - user_data["balance"]
@@ -331,7 +306,7 @@ class BotHoster(BaseBot):
 
             info = db.get_category_info(cat)
             if not info["active"] or info["maintenance"]:
-                await self.highrise.send_message(conversation_id, f"🛑 La categoría '{cat}' no está disponible temporalmente.")
+                await self.highrise.send_message(conversation_id, f"🛑 La categoría '{cat}' no está disponible.")
                 return
 
             success, proc = deploy_bot_instance(user_id, cat, room_id, token)
@@ -345,8 +320,6 @@ class BotHoster(BaseBot):
                     f"✅ ¡Bot comprado y desplegado con éxito!\n🤖 ID: `{bot_id}`.\n\n"
                     f"⚠️ Asigna permisos de MODERADOR 🛡️ y DISEÑADOR 🎨 al bot en la sala `{room_id}`."
                 )
-            else:
-                await self.highrise.send_message(conversation_id, "❌ Error al desplegar el bot. Contacta al administrador.")
 
         elif cmd == "!mybots":
             user_bots = db.get_user_bots(user_id)
@@ -384,3 +357,4 @@ class BotHoster(BaseBot):
             if len(parts) == 2:
                 db.set_active_status(parts[1], 0 if cmd == "!detener" else 1)
                 await self.highrise.send_message(conversation_id, f"✅ Estado de '{parts[1]}' actualizado.")
+                
