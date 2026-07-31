@@ -137,6 +137,30 @@ def create_bot_entry(owner_id: str, category: str, room_id: str, api_token: str,
     conn.close()
     return bot_id, expires_at
 
+def get_expired_bots():
+    """Devuelve lista de (bot_id, owner_id, category) de bots activos que ya expiraron."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("""
+        SELECT id, owner_id, category
+        FROM hosted_bots
+        WHERE status = 'active'
+          AND expires_at IS NOT NULL
+          AND expires_at <= ?
+    """, (now,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def mark_bot_expired(bot_id: int):
+    """Marca un bot como expirado en la base de datos."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE hosted_bots SET status = 'expired' WHERE id = ?", (bot_id,))
+    conn.commit()
+    conn.close()
+
 def set_maintenance(category: str, state: int):
     conn = get_connection()
     cursor = conn.cursor()
@@ -160,4 +184,3 @@ def get_category_info(category: str):
     if row:
         return {"active": bool(row[0]), "maintenance": bool(row[1])}
     return {"active": True, "maintenance": False}
-            
