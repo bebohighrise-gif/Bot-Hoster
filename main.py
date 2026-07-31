@@ -61,6 +61,7 @@ HOSTER_OWNER_ID = "{HOSTER_OWNER_ID}"
 class BotHoster(BaseBot):
 
     async def on_start(self, session_metadata: SessionMetadata) -> None:
+        self.session_metadata = session_metadata
         print("🤖 Bot Hoster de Nex-Host iniciado y conectado a la sala.")
         # Auto-mantenimiento para categorías sin plantilla
         for cat in ["musica", "fiesta", "juegos", "personalizado"]:
