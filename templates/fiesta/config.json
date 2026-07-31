@@ -1,9 +1,9 @@
 {
-    "api_token": "dee56b9d3c1725b0a1ac967ba95b71b7d5cb7c2cc95da325731778f24c7f0e51",
-    "room_id": "6391221508e102aca8c4ba02",
-    "owner_id": "638cc91171b5ff019d31ffbf",
+    "api_token": "",
+    "room_id": "",
+    "owner_id": "",
     "admin_ids": [
-        "64dc252537db1cdb8e202d8d"
+        ""
     ],
     "moderator_ids": [],
     "vip_zone": {
