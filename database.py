@@ -16,7 +16,8 @@ def init_db():
             user_id TEXT PRIMARY KEY,
             username TEXT,
             gold_balance INTEGER DEFAULT 0,
-            pending_gift_from TEXT DEFAULT NULL
+            pending_gift_from TEXT DEFAULT NULL,
+            conversation_id TEXT DEFAULT NULL
         )
     """)
     
@@ -42,12 +43,38 @@ def init_db():
         )
     """)
     
+    # Migración segura: agregar conversation_id si no existe en tablas anteriores
+    cursor.execute("PRAGMA table_info(users)")
+    existing_columns = [row[1] for row in cursor.fetchall()]
+    if "conversation_id" not in existing_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN conversation_id TEXT DEFAULT NULL")
+
     categories = ['musica', 'juegos', 'fiesta', 'personalizado']
     for cat in categories:
         cursor.execute("INSERT OR IGNORE INTO category_status (category, is_active, in_maintenance) VALUES (?, 1, 0)", (cat,))
         
     conn.commit()
     conn.close()
+
+def save_conversation_id(user_id: str, conversation_id: str):
+    """Guarda el conversation_id del usuario para poder enviarle mensajes después."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO users (user_id, conversation_id) VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET conversation_id = ?
+    """, (user_id, conversation_id, conversation_id))
+    conn.commit()
+    conn.close()
+
+def get_all_users_with_conversations():
+    """Devuelve lista de (user_id, conversation_id) de todos los usuarios con conv_id guardada."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, conversation_id FROM users WHERE conversation_id IS NOT NULL")
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
 
 def get_or_create_user(user_id: str, username: str = "Usuario"):
     conn = get_connection()
