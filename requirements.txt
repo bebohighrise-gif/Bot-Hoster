@@ -1,18 +1,4 @@
-# Dependencies are installed via setup.sh, which works around the fact that
-# highrise-bot-sdk==25.1.0 declares pendulum<3.0 and quattro<23.0, but neither
-# builds from source on Python 3.12.  The SDK runtime is fully compatible with
-# pendulum>=3.0 and quattro>=22.1.0, so setup.sh installs the SDK --no-deps
-# and then provides these compatible versions.
-#
-# Run:  bash setup.sh
-#
-# Direct package list (for reference / pip audit):
-# highrise-bot-sdk==25.1.0   (installed --no-deps by setup.sh)
-# pendulum>=3.0
-# quattro>=22.1.0
-# cattrs==22.2.0
-# click>=8.1.3
-# aiohttp>=3.9.0
-# requests>=2.31.0
-# python-dateutil>=2.8.2
-# typing_extensions>=3.10,<4.0
+highrise-bot-sdk==25.1.0
+requests>=2.31.0
+aiohttp>=3.9.0
+python-dateutil>=2.8.2

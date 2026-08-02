@@ -1,4 +1,4 @@
-modules = ["python-3.12"]
+modules = ["python-3.11"]
 
 [nix]
 channel = "stable-25_05"
@@ -24,7 +24,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "bash setup.sh && python run.py"
+args = "python run.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
