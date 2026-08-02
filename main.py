@@ -304,7 +304,7 @@ class BotHoster(BaseBot):
                     "[2] 🎮 JUEGOS (Contactar @_Kmi.77)\n"
                     "[3] 🎉 FIESTA\n"
                     "[4] ⚙️ PERSONALIZADO (Contactar @_Kmi.77)\n\n"
-                    "✍️ Responde '!plan 1' o '!plan 3' para ver precios."
+                    "✍️ Responde `!plan 1`, `!plan 2`, `!plan 3` o `!plan 4` para más info."
                 )
                 await self.highrise.send_message(conversation_id, msg_plan, type="text")
             elif parts[1] == "1":
@@ -315,6 +315,10 @@ class BotHoster(BaseBot):
                 await self.highrise.send_message(
                     conversation_id,
                     "🎵 **CATEGORÍA MÚSICA:**\n• Plan Base: 500 🪙\n\nComprar: `!buy musica <TOKEN> <ROOM_ID>`", type="text")
+            elif parts[1] == "2":
+                await self.highrise.send_message(
+                    conversation_id,
+                    "🎮 **CATEGORÍA JUEGOS:**\nEsta categoría es personalizada.\nContacta a @_Kmi.77 para cotización y disponibilidad.", type="text")
             elif parts[1] == "3":
                 info = db.get_category_info("fiesta")
                 if not info["active"] or info["maintenance"]:
@@ -323,6 +327,12 @@ class BotHoster(BaseBot):
                 await self.highrise.send_message(
                     conversation_id,
                     "🎉 **CATEGORÍA FIESTA:**\n• Plan Base: 300 🪙\n\nComprar: `!buy fiesta <TOKEN> <ROOM_ID>`", type="text")
+            elif parts[1] == "4":
+                await self.highrise.send_message(
+                    conversation_id,
+                    "⚙️ **CATEGORÍA PERSONALIZADO:**\nEsta categoría es completamente a medida.\nContacta a @_Kmi.77 para cotización y disponibilidad.", type="text")
+            else:
+                await self.highrise.send_message(conversation_id, "⚠️ Opción inválida. Usa `!plan 1`, `!plan 2`, `!plan 3` o `!plan 4`.", type="text")
 
         elif cmd == "!buy":
             if len(parts) < 4:
@@ -330,7 +340,8 @@ class BotHoster(BaseBot):
                 return
 
             cat, token, room_id = parts[1].lower(), parts[2], parts[3]
-            price = 500
+            CATEGORY_PRICES = {"musica": 500, "fiesta": 300, "juegos": 500, "personalizado": 500}
+            price = CATEGORY_PRICES.get(cat, 500)
 
             if user_data["balance"] < price:
                 missing = price - user_data["balance"]
@@ -365,30 +376,42 @@ class BotHoster(BaseBot):
                 await self.highrise.send_message(conversation_id, msg, type="text")
 
         elif cmd == "!gift":
-            if len(parts) == 3 and parts[2].isdigit():
-                target_id, amount = parts[1], int(parts[2])
-                if user_data["balance"] < amount:
-                    await self.highrise.send_message(conversation_id, "🛑 Saldo insuficiente.", type="text")
+            if len(parts) != 3 or not parts[2].isdigit():
+                await self.highrise.send_message(conversation_id, "⚠️ Uso correcto: `!gift <ID_USUARIO> <MONTO>`", type="text")
+                return
+            target_id, amount = parts[1], int(parts[2])
+            if amount <= 0:
+                await self.highrise.send_message(conversation_id, "⚠️ El monto debe ser mayor a 0.", type="text")
+            elif user_data["balance"] < amount:
+                await self.highrise.send_message(conversation_id, "🛑 Saldo insuficiente.", type="text")
+            else:
+                db.update_gold(user_id, -amount)
+                db.update_gold(target_id, amount)
+                db.set_pending_gift(target_id, f"@{user_id}")
+                await self.highrise.send_message(conversation_id, f"✅ Has regalado {amount} 🪙 a `{target_id}`.", type="text")
+
+        # --- Comandos exclusivos del propietario (silenciosos para otros usuarios) ---
+        elif cmd in ["!addgold", "!mantenimiento", "!detener", "!activar", "!giftbot", "!cancel"]:
+            if user_id != HOSTER_OWNER_ID:
+                return  # No revelar que estos comandos existen
+            if cmd == "!addgold":
+                if len(parts) == 3 and parts[2].isdigit():
+                    db.update_gold(parts[1], int(parts[2]))
+                    await self.highrise.send_message(conversation_id, f"✅ Añadidos {parts[2]} 🪙 a `{parts[1]}`.", type="text")
                 else:
-                    db.update_gold(user_id, -amount)
-                    db.update_gold(target_id, amount)
-                    db.set_pending_gift(target_id, f"@{user_id}")
-                    await self.highrise.send_message(conversation_id, f"✅ Has regalado {amount} 🪙 a `{target_id}`.", type="text")
-
-        elif cmd == "!addgold" and user_id == HOSTER_OWNER_ID:
-            if len(parts) == 3 and parts[2].isdigit():
-                db.update_gold(parts[1], int(parts[2]))
-                await self.highrise.send_message(conversation_id, f"✅ Añadidos {parts[2]} 🪙 a `{parts[1]}`.", type="text")
-
-        elif cmd == "!mantenimiento" and user_id == HOSTER_OWNER_ID:
-            if len(parts) == 3 and parts[2] in ["on", "off"]:
-                db.set_maintenance(parts[1], 1 if parts[2] == "on" else 0)
-                await self.highrise.send_message(conversation_id, f"✅ Mantenimiento de '{parts[1]}' a {parts[2]}.", type="text")
-
-        elif cmd in ["!detener", "!activar"] and user_id == HOSTER_OWNER_ID:
-            if len(parts) == 2:
-                db.set_active_status(parts[1], 0 if cmd == "!detener" else 1)
-                await self.highrise.send_message(conversation_id, f"✅ Estado de '{parts[1]}' actualizado.", type="text")
+                    await self.highrise.send_message(conversation_id, "⚠️ Uso: `!addgold <USER_ID> <CANTIDAD>`", type="text")
+            elif cmd == "!mantenimiento":
+                if len(parts) == 3 and parts[2] in ["on", "off"]:
+                    db.set_maintenance(parts[1], 1 if parts[2] == "on" else 0)
+                    await self.highrise.send_message(conversation_id, f"✅ Mantenimiento de '{parts[1]}' a {parts[2]}.", type="text")
+                else:
+                    await self.highrise.send_message(conversation_id, "⚠️ Uso: `!mantenimiento <CAT> <on/off>`", type="text")
+            elif cmd in ["!detener", "!activar"]:
+                if len(parts) == 2:
+                    db.set_active_status(parts[1], 0 if cmd == "!detener" else 1)
+                    await self.highrise.send_message(conversation_id, f"✅ Estado de '{parts[1]}' actualizado.", type="text")
+                else:
+                    await self.highrise.send_message(conversation_id, f"⚠️ Uso: `{cmd} <CATEGORIA>`", type="text")
 
         else:
             await self.highrise.send_message(
