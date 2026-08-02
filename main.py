@@ -14,6 +14,33 @@ db.init_db()
 # Guardado en memoria del estado paso a paso para !giftbot
 gift_sessions = {}
 
+# Flujo de compra paso a paso para usuarios: {user_id: {step, category, ...}}
+buy_sessions = {}
+
+# Constantes de categorías disponibles para compra
+CATEGORY_MAP = {
+    "1": "musica", "musica": "musica",
+    "3": "fiesta",  "fiesta": "fiesta",
+}
+CATEGORY_NAMES  = {"musica": "MÚSICA",  "fiesta": "FIESTA"}
+CATEGORY_EMOJIS = {"musica": "🎵",      "fiesta": "🎉"}
+DURATION_OPTIONS = {
+    "musica": [
+        ("1", "1d",   "24 Horas",   400),
+        ("2", "7d",   "7 Días",     900),
+        ("3", "15d",  "15 Días",   1600),
+        ("4", "30d",  "30 Días",   3200),
+        ("5", "perm", "Permanente",12000),
+    ],
+    "fiesta": [
+        ("1", "1d",   "24 Horas",   300),
+        ("2", "7d",   "7 Días",     800),
+        ("3", "15d",  "15 Días",   1500),
+        ("4", "30d",  "30 Días",   6000),
+        ("5", "perm", "Permanente",10000),
+    ],
+}
+
 # Procesos activos en esta sesión: {bot_id: subprocess.Popen}
 running_processes = {}
 
@@ -164,7 +191,7 @@ class BotHoster(BaseBot):
         menu += "🔹 `!menu` - Mostrar este menú\n"
         menu += "🔹 `!saldo` - Consultar balance\n"
         menu += "🔹 `!plan` - Ver categorías y precios\n"
-        menu += "🔹 `!buy <CATEGORIA> <TOKEN> <ROOM_ID>` - Comprar bot\n"
+        menu += "🔹 `!buy 1` (Música) · `!buy 3` (Fiesta) - Comprar bot\n"
         menu += "🔹 `!gift <ID_USUARIO> <MONTO>` - Regalar saldo\n"
 
         if len(user_bots) == 1:
@@ -313,6 +340,172 @@ class BotHoster(BaseBot):
                 return
 
         # -----------------------------------------------------
+        # FLUJO PASO A PASO DE COMPRA (!buy)
+        # -----------------------------------------------------
+        if user_id in buy_sessions:
+            session = buy_sessions[user_id]
+
+            # Cancelar en cualquier paso
+            if text.lower() in ["!cancelar", "cancelar", "!cancel", "cancel"]:
+                del buy_sessions[user_id]
+                await self.highrise.send_message(
+                    conversation_id,
+                    "🚫 Compra cancelada. Escribe `!buy` cuando quieras intentarlo de nuevo.",
+                    type="text")
+                return
+
+            step = session["step"]
+            cat = session["category"]
+
+            # PASO 1 — Seleccionar duración
+            if step == 1:
+                opts = DURATION_OPTIONS[cat]
+                if text not in [o[0] for o in opts]:
+                    lines = "\n".join(f"[{o[0]}] {o[2]}: {o[3]:,} 🪙" for o in opts)
+                    await self.highrise.send_message(
+                        conversation_id,
+                        f"⚠️ Opción inválida. Escribe el número del plan:\n\n{lines}\n\nO escribe **cancelar** para salir.",
+                        type="text")
+                    return
+                chosen = next(o for o in opts if o[0] == text)
+                session["duration"]  = chosen[1]
+                session["dur_label"] = chosen[2]
+                session["price"]     = chosen[3]
+                session["step"]      = 2
+                # Verificar saldo antes de pedir confirmación
+                user_data_fresh = db.get_or_create_user(user_id)
+                if user_data_fresh["balance"] < chosen[3]:
+                    missing = chosen[3] - user_data_fresh["balance"]
+                    del buy_sessions[user_id]
+                    await self.highrise.send_message(
+                        conversation_id,
+                        f"🛑 **Saldo insuficiente.**\n\n"
+                        f"• Plan seleccionado: {chosen[2]} — {chosen[3]:,} 🪙\n"
+                        f"• Tu saldo: {user_data_fresh['balance']:,} 🪙\n"
+                        f"• Te faltan: {missing:,} 🪙\n\n"
+                        f"Recarga tu saldo con tips/donaciones en la sala y vuelve a intentarlo.",
+                        type="text")
+                    return
+                await self.highrise.send_message(
+                    conversation_id,
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🛒 **CONFIRMAR COMPRA**\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"{CATEGORY_EMOJIS[cat]} Categoría: **{CATEGORY_NAMES[cat]}**\n"
+                    f"⏱️ Duración: **{chosen[2]}**\n"
+                    f"💰 Precio: **{chosen[3]:,} 🪙**\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"Escribe **aceptar** para confirmar o **cancelar** para salir.",
+                    type="text")
+                return
+
+            # PASO 2 — Confirmación
+            elif step == 2:
+                if text.lower() == "aceptar":
+                    session["step"] = 3
+                    await self.highrise.send_message(
+                        conversation_id,
+                        "✅ ¡Compra confirmada!\n\n"
+                        "🔑 **Paso 1/2 — Token del bot:**\n"
+                        "Envía el **API Token** del bot que quieres alojar.\n\n"
+                        "_(Escribe **cancelar** en cualquier momento para salir)_",
+                        type="text")
+                elif text.lower() in ["cancelar", "cancel"]:
+                    del buy_sessions[user_id]
+                    await self.highrise.send_message(
+                        conversation_id, "🚫 Compra cancelada.", type="text")
+                else:
+                    await self.highrise.send_message(
+                        conversation_id,
+                        "⚠️ Responde **aceptar** para confirmar la compra o **cancelar** para salir.",
+                        type="text")
+                return
+
+            # PASO 3 — Token del bot
+            elif step == 3:
+                token_val = text.strip()
+                # Validación de formato: token de Highrise = 64 caracteres hex
+                if not re.match(r'^[a-f0-9]{64}$', token_val):
+                    await self.highrise.send_message(
+                        conversation_id,
+                        "❌ **Token inválido.**\n\n"
+                        "El token debe ser una cadena de **64 caracteres** en formato hexadecimal.\n"
+                        "Asegúrate de copiarlo completo desde el portal de Highrise.\n\n"
+                        "🔑 Intenta de nuevo o escribe **cancelar** para salir:",
+                        type="text")
+                    return
+                session["token"] = token_val
+                session["step"]  = 4
+                await self.highrise.send_message(
+                    conversation_id,
+                    "✅ Token válido.\n\n"
+                    "📍 **Paso 2/2 — ID de la sala:**\n"
+                    "Envía el **Room ID** de la sala donde quieres que el bot esté activo.\n\n"
+                    "_(Lo encuentras en la URL de la sala en Highrise)_",
+                    type="text")
+                return
+
+            # PASO 4 — Room ID y despliegue
+            elif step == 4:
+                room_id_val = text.strip()
+                cat        = session["category"]
+                token_val  = session["token"]
+                duration   = session["duration"]
+                price      = session["price"]
+                dur_label  = session["dur_label"]
+                del buy_sessions[user_id]
+
+                # Re-verificar saldo y disponibilidad antes de cobrar
+                user_data_fresh = db.get_or_create_user(user_id)
+                if user_data_fresh["balance"] < price:
+                    await self.highrise.send_message(
+                        conversation_id,
+                        f"🛑 Saldo insuficiente al momento de procesar. Tu saldo es {user_data_fresh['balance']:,} 🪙.",
+                        type="text")
+                    return
+                info = db.get_category_info(cat)
+                if not info["active"] or info["maintenance"]:
+                    await self.highrise.send_message(
+                        conversation_id,
+                        f"🛑 La categoría **{CATEGORY_NAMES[cat]}** no está disponible en este momento.",
+                        type="text")
+                    return
+
+                await self.highrise.send_message(
+                    conversation_id, "⏳ Desplegando tu bot, espera un momento...", type="text")
+
+                duration_param = None if duration == "perm" else duration
+                success, proc = deploy_bot_instance(user_id, cat, room_id_val, token_val)
+                if success:
+                    db.update_gold(user_id, -price)
+                    bot_id, exp_date = db.create_bot_entry(
+                        user_id, cat, room_id_val, token_val, duration_str=duration_param)
+                    if proc:
+                        running_processes[bot_id] = proc
+                    exp_msg = f"📅 Expira: `{exp_date}` UTC" if exp_date else "♾️ Duración: **Permanente 24/7**"
+                    await self.highrise.send_message(
+                        conversation_id,
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"✅ **¡BOT DESPLEGADO CON ÉXITO!**\n"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"{CATEGORY_EMOJIS[cat]} Categoría: **{CATEGORY_NAMES[cat]}**\n"
+                        f"🤖 Bot ID: `{bot_id}`\n"
+                        f"🏠 Sala: `{room_id_val}`\n"
+                        f"⏱️ Plan: **{dur_label}**\n"
+                        f"{exp_msg}\n"
+                        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                        f"⚠️ **Acción requerida:**\n"
+                        f"Asigna permisos de **MODERADOR** 🛡️ y **DISEÑADOR** 🎨 al bot en la sala `{room_id_val}` para que funcione correctamente.",
+                        type="text")
+                else:
+                    await self.highrise.send_message(
+                        conversation_id,
+                        "❌ Hubo un error al desplegar el bot. Verifica que la categoría tenga plantilla activa y vuelve a intentarlo.\n"
+                        "Si el problema persiste, contacta al soporte.",
+                        type="text")
+                return
+
+        # -----------------------------------------------------
         # COMANDOS NORMALES
         # -----------------------------------------------------
         if cmd == "!giftbot" and user_id == HOSTER_OWNER_ID:
@@ -355,7 +548,7 @@ class BotHoster(BaseBot):
                     "• `15d` (15 Días): 1,600 🪙\n"
                     "• `30d` (30 Días): 3,200 🪙\n"
                     "• `perm` (Permanente): 12,000 🪙\n\n"
-                    "Comprar: `!buy musica <TIEMPO> <TOKEN> <ROOM_ID>`",
+                    "Comprar: `!buy 1` para iniciar el proceso guiado.",
                     type="text")
             elif parts[1] == "2":
                 await self.highrise.send_message(
@@ -374,7 +567,7 @@ class BotHoster(BaseBot):
                     "• `15d` (15 Días): 1,500 🪙\n"
                     "• `30d` (30 Días): 6,000 🪙\n"
                     "• `perm` (Permanente): 10,000 🪙\n\n"
-                    "Comprar: `!buy fiesta <TIEMPO> <TOKEN> <ROOM_ID>`",
+                    "Comprar: `!buy 3` para iniciar el proceso guiado.",
                     type="text")
             elif parts[1] == "4":
                 await self.highrise.send_message(
@@ -384,60 +577,48 @@ class BotHoster(BaseBot):
                 await self.highrise.send_message(conversation_id, "⚠️ Opción inválida. Usa `!plan 1`, `!plan 2`, `!plan 3` o `!plan 4`.", type="text")
 
         elif cmd == "!buy":
-            # Uso: !buy <musica/fiesta> <1d/7d/15d/30d/perm> <TOKEN> <ROOM_ID>
-            if len(parts) < 5:
+            # Inicio del flujo de compra paso a paso
+            if len(parts) < 2:
                 await self.highrise.send_message(
                     conversation_id,
-                    "⚠️ Uso correcto: `!buy <CATEGORIA> <TIEMPO> <TOKEN> <ROOM_ID>`\n"
-                    "Ejemplo: `!buy musica 30d TOKEN ROOM_ID`",
+                    "🛒 **Comprar un bot:**\n\n"
+                    "• `!buy 1` — 🎵 Bot de Música\n"
+                    "• `!buy 3` — 🎉 Bot de Fiesta\n\n"
+                    "Escribe el comando con el número de categoría para iniciar.",
                     type="text")
                 return
 
-            cat = parts[1].lower()
-            dur_input = parts[2].lower()
-            token = parts[3]
-            room_id = parts[4]
-
-            pricing_matrix = {
-                "musica": {"1d": 400, "7d": 900, "15d": 1600, "30d": 3200, "perm": 12000},
-                "fiesta": {"1d": 300, "7d": 800, "15d": 1500, "30d": 6000, "perm": 10000}
-            }
-
-            if cat not in pricing_matrix:
-                await self.highrise.send_message(conversation_id, "⚠️ Categoría no disponible. Usa `musica` o `fiesta`.", type="text")
+            cat_input = parts[1].lower()
+            if cat_input not in CATEGORY_MAP:
+                await self.highrise.send_message(
+                    conversation_id,
+                    "⚠️ Categoría no válida.\n\n"
+                    "• `!buy 1` — 🎵 Música\n"
+                    "• `!buy 3` — 🎉 Fiesta",
+                    type="text")
                 return
 
-            if dur_input not in pricing_matrix[cat]:
-                await self.highrise.send_message(conversation_id, "⚠️ Tiempo no válido. Opciones: `1d`, `7d`, `15d`, `30d`, `perm`.", type="text")
-                return
-
-            price = pricing_matrix[cat][dur_input]
-
-            if user_data["balance"] < price:
-                missing = price - user_data["balance"]
-                await self.highrise.send_message(conversation_id, f"🛑 Saldo insuficiente. Te faltan {missing} 🪙.", type="text")
-                return
-
+            cat = CATEGORY_MAP[cat_input]
             info = db.get_category_info(cat)
             if not info["active"] or info["maintenance"]:
-                await self.highrise.send_message(conversation_id, f"🛑 La categoría '{cat}' no está disponible.", type="text")
-                return
-
-            duration_param = None if dur_input == "perm" else dur_input
-
-            success, proc = deploy_bot_instance(user_id, cat, room_id, token)
-            if success:
-                db.update_gold(user_id, -price)
-                bot_id, exp_date = db.create_bot_entry(user_id, cat, room_id, token, duration_str=duration_param)
-                if proc:
-                    running_processes[bot_id] = proc
-                exp_msg = f" (Expira: {exp_date} UTC)" if exp_date else " (Permanente 24/7)"
                 await self.highrise.send_message(
                     conversation_id,
-                    f"✅ ¡Bot `{cat.upper()}` comprado y desplegado con éxito!\n"
-                    f"🤖 ID: `{bot_id}`{exp_msg}.\n\n"
-                    f"⚠️ Asigna permisos de MODERADOR 🛡️ y DISEÑADOR 🎨 al bot en la sala `{room_id}`.",
+                    f"🛑 La categoría **{CATEGORY_NAMES[cat]}** no está disponible temporalmente.",
                     type="text")
+                return
+
+            # Mostrar opciones de duración y arrancar el flujo
+            opts = DURATION_OPTIONS[cat]
+            lines = "\n".join(f"[{o[0]}] {o[2]}: **{o[3]:,} 🪙**" for o in opts)
+            buy_sessions[user_id] = {"step": 1, "category": cat, "duration": None,
+                                     "dur_label": None, "price": None, "token": None}
+            await self.highrise.send_message(
+                conversation_id,
+                f"{CATEGORY_EMOJIS[cat]} **PLANES {CATEGORY_NAMES[cat]}:**\n\n"
+                f"{lines}\n\n"
+                f"💰 Tu saldo: **{user_data['balance']:,} 🪙**\n\n"
+                f"✍️ Escribe el **número del plan** que deseas o **cancelar** para salir:",
+                type="text")
 
         elif cmd == "!mybots":
             user_bots = db.get_user_bots(user_id)
