@@ -124,8 +124,7 @@ class BotHoster(BaseBot):
                         try:
                             await self.highrise.send_message(
                                 conv_id,
-                                f"⏰ Tu bot de categoría `{category}` (ID `{bot_id}`) ha expirado y fue detenido.",
-                                type="text"
+                                f"⏰ Tu bot de categoría `{category}` (ID `{bot_id}`) ha expirado y fue detenido."
                             )
                         except Exception:
                             pass  # La conversación puede haber cerrado; no es crítico
@@ -354,8 +353,7 @@ class BotHoster(BaseBot):
                     lines = "\n".join(f"[{o[0]}] {o[2]}: {o[3]:,} 🪙" for o in opts)
                     await self.highrise.send_message(
                         conversation_id,
-                        f"⚠️ Opción inválida. Escribe solo el número del plan:\n\n{lines}",
-                        type="text")
+                        f"⚠️ Opción inválida. Escribe solo el número del plan:\n\n{lines}")
                     return
                 chosen = next(o for o in opts if o[0] == text)
                 session["duration"]  = chosen[1]
@@ -373,8 +371,7 @@ class BotHoster(BaseBot):
                         f"• Plan seleccionado: {chosen[2]} — {chosen[3]:,} 🪙\n"
                         f"• Tu saldo: {user_data_fresh['balance']:,} 🪙\n"
                         f"• Te faltan: {missing:,} 🪙\n\n"
-                        f"Recarga tu saldo con tips/donaciones en la sala y vuelve a intentarlo.",
-                        type="text")
+                        f"Recarga tu saldo con tips/donaciones en la sala y vuelve a intentarlo.")
                     return
                 await self.highrise.send_message(
                     conversation_id,
@@ -385,8 +382,7 @@ class BotHoster(BaseBot):
                     f"⏱️ Duración: **{chosen[2]}**\n"
                     f"💰 Precio: **{chosen[3]:,} 🪙**\n"
                     f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"Escribe **aceptar** para confirmar o **cancelar** para salir.",
-                    type="text")
+                    f"Escribe **aceptar** para confirmar o **cancelar** para salir.")
                 return
 
             # PASO 2 — Confirmación
@@ -397,8 +393,7 @@ class BotHoster(BaseBot):
                         conversation_id,
                         "✅ ¡Compra confirmada!\n\n"
                         "🔑 **Paso 1/2 — Token del bot:**\n"
-                        "Envía el **API Token** del bot que quieres alojar.",
-                        type="text")
+                        "Envía el **API Token** del bot que quieres alojar.")
                 elif text.lower() in ["cancelar", "cancel"]:
                     del buy_sessions[user_id]
                     await self.highrise.send_message(
@@ -406,8 +401,7 @@ class BotHoster(BaseBot):
                 else:
                     await self.highrise.send_message(
                         conversation_id,
-                        "⚠️ Responde **aceptar** para confirmar la compra o **cancelar** para salir.",
-                        type="text")
+                        "⚠️ Responde **aceptar** para confirmar la compra o **cancelar** para salir.")
                 return
 
             # PASO 3 — Token del bot
@@ -420,8 +414,7 @@ class BotHoster(BaseBot):
                         "❌ **Token inválido.**\n\n"
                         "El token debe ser una cadena de **64 caracteres** en formato hexadecimal.\n"
                         "Asegúrate de copiarlo completo desde el portal de Highrise.\n\n"
-                        "🔑 Intenta de nuevo o escribe **cancelar** para salir:",
-                        type="text")
+                        "🔑 Intenta de nuevo o escribe **cancelar** para salir:")
                     return
                 session["token"] = token_val
                 session["step"]  = 4
@@ -430,8 +423,7 @@ class BotHoster(BaseBot):
                     "✅ Token válido.\n\n"
                     "📍 **Paso 2/2 — ID de la sala:**\n"
                     "Envía el **Room ID** de la sala donde quieres que el bot esté activo.\n\n"
-                    "_(Lo encuentras en la URL de la sala en Highrise)_",
-                    type="text")
+                    "_(Lo encuentras en la URL de la sala en Highrise)_")
                 return
 
             # PASO 4 — Room ID y despliegue
@@ -449,15 +441,13 @@ class BotHoster(BaseBot):
                 if user_data_fresh["balance"] < price:
                     await self.highrise.send_message(
                         conversation_id,
-                        f"🛑 Saldo insuficiente al momento de procesar. Tu saldo es {user_data_fresh['balance']:,} 🪙.",
-                        type="text")
+                        f"🛑 Saldo insuficiente al momento de procesar. Tu saldo es {user_data_fresh['balance']:,} 🪙.")
                     return
                 info = db.get_category_info(cat)
                 if not info["active"] or info["maintenance"]:
                     await self.highrise.send_message(
                         conversation_id,
-                        f"🛑 La categoría **{CATEGORY_NAMES[cat]}** no está disponible en este momento.",
-                        type="text")
+                        f"🛑 La categoría **{CATEGORY_NAMES[cat]}** no está disponible en este momento.")
                     return
 
                 await self.highrise.send_message(
@@ -484,14 +474,12 @@ class BotHoster(BaseBot):
                         f"{exp_msg}\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n\n"
                         f"⚠️ **Acción requerida:**\n"
-                        f"Asigna permisos de **MODERADOR** 🛡️ y **DISEÑADOR** 🎨 al bot en la sala `{room_id_val}` para que funcione correctamente.",
-                        type="text")
+                        f"Asigna permisos de **MODERADOR** 🛡️ y **DISEÑADOR** 🎨 al bot en la sala `{room_id_val}` para que funcione correctamente.")
                 else:
                     await self.highrise.send_message(
                         conversation_id,
                         "❌ Hubo un error al desplegar el bot. Verifica que la categoría tenga plantilla activa y vuelve a intentarlo.\n"
-                        "Si el problema persiste, contacta al soporte.",
-                        type="text")
+                        "Si el problema persiste, contacta al soporte.")
                 return
 
         # -----------------------------------------------------
@@ -537,8 +525,7 @@ class BotHoster(BaseBot):
                     "• `15d` (15 Días): 1,600 🪙\n"
                     "• `30d` (30 Días): 3,200 🪙\n"
                     "• `perm` (Permanente): 12,000 🪙\n\n"
-                    "Comprar: `!buy 1` para iniciar el proceso guiado.",
-                    type="text")
+                    "Comprar: `!buy 1` para iniciar el proceso guiado.")
             elif parts[1] == "2":
                 await self.highrise.send_message(
                     conversation_id,
@@ -556,8 +543,7 @@ class BotHoster(BaseBot):
                     "• `15d` (15 Días): 1,500 🪙\n"
                     "• `30d` (30 Días): 6,000 🪙\n"
                     "• `perm` (Permanente): 10,000 🪙\n\n"
-                    "Comprar: `!buy 3` para iniciar el proceso guiado.",
-                    type="text")
+                    "Comprar: `!buy 3` para iniciar el proceso guiado.")
             elif parts[1] == "4":
                 await self.highrise.send_message(
                     conversation_id,
@@ -573,8 +559,7 @@ class BotHoster(BaseBot):
                     "🛒 **Comprar un bot:**\n\n"
                     "• `!buy 1` — 🎵 Bot de Música\n"
                     "• `!buy 3` — 🎉 Bot de Fiesta\n\n"
-                    "Escribe el comando con el número de categoría para iniciar.",
-                    type="text")
+                    "Escribe el comando con el número de categoría para iniciar.")
                 return
 
             cat_input = parts[1].lower()
@@ -583,8 +568,7 @@ class BotHoster(BaseBot):
                     conversation_id,
                     "⚠️ Categoría no válida.\n\n"
                     "• `!buy 1` — 🎵 Música\n"
-                    "• `!buy 3` — 🎉 Fiesta",
-                    type="text")
+                    "• `!buy 3` — 🎉 Fiesta")
                 return
 
             cat = CATEGORY_MAP[cat_input]
@@ -592,8 +576,7 @@ class BotHoster(BaseBot):
             if not info["active"] or info["maintenance"]:
                 await self.highrise.send_message(
                     conversation_id,
-                    f"🛑 La categoría **{CATEGORY_NAMES[cat]}** no está disponible temporalmente.",
-                    type="text")
+                    f"🛑 La categoría **{CATEGORY_NAMES[cat]}** no está disponible temporalmente.")
                 return
 
             # Mostrar opciones de duración y arrancar el flujo
@@ -606,8 +589,7 @@ class BotHoster(BaseBot):
                 f"{CATEGORY_EMOJIS[cat]} **PLANES {CATEGORY_NAMES[cat]}:**\n\n"
                 f"{lines}\n\n"
                 f"💰 Tu saldo: **{user_data['balance']:,} 🪙**\n\n"
-                f"✍️ Escribe el **número del plan** que deseas o **cancelar** para salir:",
-                type="text")
+                f"✍️ Escribe el **número del plan** que deseas o **cancelar** para salir:")
 
         elif cmd == "!mybots":
             user_bots = db.get_user_bots(user_id)
@@ -644,8 +626,7 @@ class BotHoster(BaseBot):
                 if len(parts) < 2:
                     await self.highrise.send_message(
                         conversation_id,
-                        "⚠️ Uso: `!broadcast <mensaje>`\nEnvía el mensaje a todos los usuarios que hayan escrito al bot.",
-                        type="text")
+                        "⚠️ Uso: `!broadcast <mensaje>`\nEnvía el mensaje a todos los usuarios que hayan escrito al bot.")
                 else:
                     broadcast_msg = " ".join(parts[1:])
                     recipients = db.get_all_users_with_conversations()
@@ -662,8 +643,7 @@ class BotHoster(BaseBot):
                     await self.highrise.send_message(
                         conversation_id,
                         f"✅ Broadcast enviado a {sent_count} usuario(s)."
-                        + (f"\n⚠️ {failed_count} fallaron." if failed_count else ""),
-                        type="text")
+                        + (f"\n⚠️ {failed_count} fallaron." if failed_count else ""))
 
             elif cmd == "!tex":
                 if len(parts) < 2:
@@ -680,16 +660,14 @@ class BotHoster(BaseBot):
                 if len(parts) < 3:
                     await self.highrise.send_message(
                         conversation_id,
-                        "⚠️ Uso: `!anuncio <mensaje> <tiempo>`\nEjemplos: `!anuncio Hola! 5m` · `!anuncio Visita la sala 30s` · `!anuncio Info 1h`",
-                        type="text")
+                        "⚠️ Uso: `!anuncio <mensaje> <tiempo>`\nEjemplos: `!anuncio Hola! 5m` · `!anuncio Visita la sala 30s` · `!anuncio Info 1h`")
                 else:
                     raw_time = parts[-1].lower()
                     match = re.match(r"^(\d+)([smh])$", raw_time)
                     if not match:
                         await self.highrise.send_message(
                             conversation_id,
-                            "⚠️ Formato de tiempo inválido. Usa `s` (segundos), `m` (minutos) o `h` (horas).\nEj: `30s`, `5m`, `1h`",
-                            type="text")
+                            "⚠️ Formato de tiempo inválido. Usa `s` (segundos), `m` (minutos) o `h` (horas).\nEj: `30s`, `5m`, `1h`")
                     else:
                         value, unit = int(match.group(1)), match.group(2)
                         interval = value * {"s": 1, "m": 60, "h": 3600}[unit]
@@ -707,8 +685,7 @@ class BotHoster(BaseBot):
                         tiempo_fmt = f"{value}{'seg' if unit == 's' else 'min' if unit == 'm' else 'h'}"
                         await self.highrise.send_message(
                             conversation_id,
-                            f"✅ Anuncio activado cada **{tiempo_fmt}**:\n📢 `{message_ann}`\n\nUsa `!parar` para detenerlo.",
-                            type="text")
+                            f"✅ Anuncio activado cada **{tiempo_fmt}**:\n📢 `{message_ann}`\n\nUsa `!parar` para detenerlo.")
 
             elif cmd == "!parar":
                 if "task" in active_announcement:
