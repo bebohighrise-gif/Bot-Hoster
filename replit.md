@@ -4,11 +4,13 @@ Bot de hosting para Highrise. Permite que usuarios compren o reciban bots alojad
 
 ## Cómo correr
 
-El workflow **Bot Hoster** ejecuta `python run.py`, que lee las credenciales de `config.json` y lanza el bot con el SDK de Highrise.
+El workflow **Bot Hoster** ejecuta `python run.py`, que lee las credenciales de `config.json` y lanza el bot con el SDK de Highrise (v25.1.0).
 
 ```bash
 python run.py
 ```
+
+> **Nota SDK**: pendulum 2.x no compila en Python 3.12. Se instala `highrise-bot-sdk==25.1.0 --no-deps` y luego `pendulum>=3.0` de forma separada.
 
 ## Configuración
 

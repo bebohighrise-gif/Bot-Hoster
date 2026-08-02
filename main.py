@@ -17,6 +17,9 @@ gift_sessions = {}
 # Procesos activos en esta sesión: {bot_id: subprocess.Popen}
 running_processes = {}
 
+# Mapa de conversaciones activas: {user_id: conversation_id}
+user_conversations = {}
+
 
 def template_exists(bot_type: str) -> bool:
     """Verifica si la carpeta de plantilla existe y tiene archivos."""
@@ -84,6 +87,17 @@ class BotHoster(BaseBot):
                         print(f"🛑 Bot ID {bot_id} ({category}) de {owner_id} terminado por expiración.")
                     db.mark_bot_expired(bot_id)
                     print(f"⏰ Bot ID {bot_id} marcado como expirado.")
+                    # Notificar al usuario si tiene una conversación activa
+                    conv_id = user_conversations.get(owner_id)
+                    if conv_id:
+                        try:
+                            await self.highrise.send_message(
+                                conv_id,
+                                f"⏰ Tu bot de categoría `{category}` (ID `{bot_id}`) ha expirado y fue detenido.",
+                                type="text"
+                            )
+                        except Exception:
+                            pass  # La conversación puede haber cerrado; no es crítico
             except Exception as e:
                 print(f"❌ Error en verificador de expiración: {e}")
 
@@ -146,6 +160,9 @@ class BotHoster(BaseBot):
         if not hasattr(self, 'session_metadata') or user_id == self.session_metadata.user_id:
             return
 
+        # Guardar la conversación activa de este usuario en memoria
+        user_conversations[user_id] = conversation_id
+
         user_data = db.get_or_create_user(user_id)
 
         # Notificación de regalo pendiente
@@ -160,16 +177,21 @@ class BotHoster(BaseBot):
             await self._send_menu(user_id, conversation_id)
             return
 
-        # Obtener el texto del mensaje más reciente enviado por el usuario
+        # Obtener el texto del mensaje más reciente enviado por el usuario.
+        # SDK 25.x: get_messages devuelve GetMessagesResponse con .messages (list[Message]).
+        # Message tiene .sender_id y .content.
         try:
             msgs_resp = await self.highrise.get_messages(conversation_id)
             if not msgs_resp or not msgs_resp.messages:
                 return
+
             text = None
+            bot_id = self.session_metadata.user_id
             for msg in msgs_resp.messages:
-                if msg.user_id != self.session_metadata.user_id:
+                if msg.sender_id != bot_id:
                     text = msg.content.strip()
                     break
+
             if not text:
                 return
         except Exception as e:
