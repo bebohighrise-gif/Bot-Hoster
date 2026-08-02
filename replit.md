@@ -10,7 +10,7 @@ El workflow **Bot Hoster** ejecuta `python run.py`, que lee las credenciales de 
 python run.py
 ```
 
-> **Nota SDK**: pendulum 2.x no compila en Python 3.12. Se instala `highrise-bot-sdk==25.1.0 --no-deps` y luego `pendulum>=3.0` de forma separada.
+> **Runtime**: Python 3.11. Todas las dependencias instaladas vía pip en `.pythonlibs`.
 
 ## Configuración
 
