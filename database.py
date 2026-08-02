@@ -91,6 +91,15 @@ def set_pending_gift(target_id: str, sender_name: str):
     conn.commit()
     conn.close()
 
+def get_active_bot_instances():
+    """Devuelve lista de (owner_id, category) de todos los bots activos alojados."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT owner_id, category FROM hosted_bots WHERE status = 'active'")
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
 def get_user_bots(user_id: str):
     conn = get_connection()
     cursor = conn.cursor()

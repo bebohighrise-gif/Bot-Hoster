@@ -20,6 +20,9 @@ running_processes = {}
 # Mapa de conversaciones activas: {user_id: conversation_id}
 user_conversations = {}
 
+# Anuncio recurrente activo: {"message": str, "interval": int, "task": asyncio.Task}
+active_announcement = {}
+
 
 def template_exists(bot_type: str) -> bool:
     """Verifica si la carpeta de plantilla existe y tiene archivos."""
@@ -52,8 +55,9 @@ HOSTER_OWNER_ID = "{HOSTER_OWNER_ID}"
         f.write(config_content)
 
     try:
-        run_file_path = os.path.join(instance_path, "run.py")
-        proc = subprocess.Popen(["python", run_file_path])
+        # Correr desde la carpeta de la instancia para que console_message.txt
+        # sea único por bot y no compartido entre todos.
+        proc = subprocess.Popen(["python", "run.py"], cwd=instance_path)
         print(f"🟢 Bot de {bot_type} desplegado con éxito para el usuario {user_id} (PID {proc.pid})")
         return True, proc
     except Exception as e:
@@ -100,6 +104,30 @@ class BotHoster(BaseBot):
                             pass  # La conversación puede haber cerrado; no es crítico
             except Exception as e:
                 print(f"❌ Error en verificador de expiración: {e}")
+
+    def _write_tex_to_instances(self, message: str) -> int:
+        """Escribe console_message.txt en cada instancia activa. Devuelve cuántas recibieron el mensaje."""
+        sent = 0
+        for bot_instance in db.get_active_bot_instances():
+            owner_id, category = bot_instance
+            ipath = os.path.join(HOSTED_INSTANCES_DIR, f"user_{owner_id}_{category.lower()}")
+            if os.path.isdir(ipath):
+                try:
+                    with open(os.path.join(ipath, "console_message.txt"), "w", encoding="utf-8") as f:
+                        f.write(message)
+                    sent += 1
+                except Exception as e:
+                    print(f"❌ Error escribiendo a instancia {ipath}: {e}")
+        return sent
+
+    async def _announcement_loop(self, message: str, interval: int) -> None:
+        """Loop que reenvía el mensaje a todos los bots alojados cada `interval` segundos."""
+        try:
+            while True:
+                self._write_tex_to_instances(message)
+                await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            pass
 
     async def on_user_join(self, user: User, position: Position | AnchorPosition) -> None:
         db.get_or_create_user(user.id, user.username)
@@ -340,8 +368,7 @@ class BotHoster(BaseBot):
                 return
 
             cat, token, room_id = parts[1].lower(), parts[2], parts[3]
-            CATEGORY_PRICES = {"musica": 500, "fiesta": 300, "juegos": 500, "personalizado": 500}
-            price = CATEGORY_PRICES.get(cat, 500)
+            price = 500
 
             if user_data["balance"] < price:
                 missing = price - user_data["balance"]
@@ -391,10 +418,63 @@ class BotHoster(BaseBot):
                 await self.highrise.send_message(conversation_id, f"✅ Has regalado {amount} 🪙 a `{target_id}`.", type="text")
 
         # --- Comandos exclusivos del propietario (silenciosos para otros usuarios) ---
-        elif cmd in ["!addgold", "!mantenimiento", "!detener", "!activar", "!giftbot", "!cancel"]:
+        elif cmd in ["!tex", "!anuncio", "!parar", "!addgold", "!mantenimiento", "!detener", "!activar", "!giftbot", "!cancel"]:
             if user_id != HOSTER_OWNER_ID:
                 return  # No revelar que estos comandos existen
-            if cmd == "!addgold":
+            if cmd == "!tex":
+                if len(parts) < 2:
+                    await self.highrise.send_message(conversation_id, "⚠️ Uso: `!tex <mensaje>`", type="text")
+                else:
+                    message_tex = " ".join(parts[1:])
+                    sent = self._write_tex_to_instances(message_tex)
+                    await self.highrise.send_message(
+                        conversation_id,
+                        f"📢 Mensaje enviado a {sent} bot(s) alojado(s).", type="text")
+
+            elif cmd == "!anuncio":
+                # Uso: !anuncio <mensaje> <tiempo>  → ej: !anuncio Hola 5m / 30s / 2h
+                if len(parts) < 3:
+                    await self.highrise.send_message(
+                        conversation_id,
+                        "⚠️ Uso: `!anuncio <mensaje> <tiempo>`\nEjemplos: `!anuncio Hola! 5m` · `!anuncio Visita la sala 30s` · `!anuncio Info 1h`",
+                        type="text")
+                else:
+                    raw_time = parts[-1].lower()
+                    match = re.match(r"^(\d+)([smh])$", raw_time)
+                    if not match:
+                        await self.highrise.send_message(
+                            conversation_id,
+                            "⚠️ Formato de tiempo inválido. Usa `s` (segundos), `m` (minutos) o `h` (horas).\nEj: `30s`, `5m`, `1h`",
+                            type="text")
+                    else:
+                        value, unit = int(match.group(1)), match.group(2)
+                        interval = value * {"s": 1, "m": 60, "h": 3600}[unit]
+                        message_ann = " ".join(parts[1:-1])
+
+                        # Cancelar anuncio anterior si existía
+                        if "task" in active_announcement:
+                            active_announcement["task"].cancel()
+
+                        task = asyncio.create_task(self._announcement_loop(message_ann, interval))
+                        active_announcement["message"] = message_ann
+                        active_announcement["interval"] = interval
+                        active_announcement["task"] = task
+
+                        tiempo_fmt = f"{value}{'seg' if unit == 's' else 'min' if unit == 'm' else 'h'}"
+                        await self.highrise.send_message(
+                            conversation_id,
+                            f"✅ Anuncio activado cada **{tiempo_fmt}**:\n📢 `{message_ann}`\n\nUsa `!parar` para detenerlo.",
+                            type="text")
+
+            elif cmd == "!parar":
+                if "task" in active_announcement:
+                    active_announcement["task"].cancel()
+                    active_announcement.clear()
+                    await self.highrise.send_message(conversation_id, "🛑 Anuncio recurrente detenido.", type="text")
+                else:
+                    await self.highrise.send_message(conversation_id, "ℹ️ No hay ningún anuncio activo.", type="text")
+
+            elif cmd == "!addgold":
                 if len(parts) == 3 and parts[2].isdigit():
                     db.update_gold(parts[1], int(parts[2]))
                     await self.highrise.send_message(conversation_id, f"✅ Añadidos {parts[2]} 🪙 a `{parts[1]}`.", type="text")
