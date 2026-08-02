@@ -344,16 +344,6 @@ class BotHoster(BaseBot):
         # -----------------------------------------------------
         if user_id in buy_sessions:
             session = buy_sessions[user_id]
-
-            # Cancelar en cualquier paso
-            if text.lower() in ["!cancelar", "cancelar", "!cancel", "cancel"]:
-                del buy_sessions[user_id]
-                await self.highrise.send_message(
-                    conversation_id,
-                    "🚫 Compra cancelada. Escribe `!buy` cuando quieras intentarlo de nuevo.",
-                    type="text")
-                return
-
             step = session["step"]
             cat = session["category"]
 
@@ -364,7 +354,7 @@ class BotHoster(BaseBot):
                     lines = "\n".join(f"[{o[0]}] {o[2]}: {o[3]:,} 🪙" for o in opts)
                     await self.highrise.send_message(
                         conversation_id,
-                        f"⚠️ Opción inválida. Escribe el número del plan:\n\n{lines}\n\nO escribe **cancelar** para salir.",
+                        f"⚠️ Opción inválida. Escribe solo el número del plan:\n\n{lines}",
                         type="text")
                     return
                 chosen = next(o for o in opts if o[0] == text)
@@ -407,8 +397,7 @@ class BotHoster(BaseBot):
                         conversation_id,
                         "✅ ¡Compra confirmada!\n\n"
                         "🔑 **Paso 1/2 — Token del bot:**\n"
-                        "Envía el **API Token** del bot que quieres alojar.\n\n"
-                        "_(Escribe **cancelar** en cualquier momento para salir)_",
+                        "Envía el **API Token** del bot que quieres alojar.",
                         type="text")
                 elif text.lower() in ["cancelar", "cancel"]:
                     del buy_sessions[user_id]
