@@ -1,9 +1,0 @@
-setuptools>=68.2.2
-highrise-bot-sdk>=24.1.0
-Flask>=3.0.2
-requests>=2.31.0
-gunicorn>=21.2.0
-aiohttp>=3.8.4
-cattrs>=22.2.0
-quattro>=22.1.0
-pendulum>=3.0.0

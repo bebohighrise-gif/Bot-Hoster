@@ -533,14 +533,12 @@ class BotHoster(BaseBot):
                 price       = session["price"]
                 dur_label   = session["dur_label"]
 
-                # Validar Room ID contra la WebAPI antes de continuar
-                await self.highrise.send_message(conversation_id, "<#AAAAAA>⏳ Verificando sala...")
-                try:
-                    await self.webapi.get_room(room_id_val)
-                except Exception:
+                # Validar formato del Room ID (24 caracteres hex — ObjectID de MongoDB)
+                if not re.match(r'^[a-f0-9]{24}$', room_id_val):
                     await self.highrise.send_message(conversation_id,
-                        "<#E74C3C>❌ Room ID inválido o sala no encontrada.\n"
-                        "<#FFFFFF>Verifica el ID e intenta de nuevo:")
+                        "<#E74C3C>❌ Room ID inválido. Debe tener 24 caracteres hexadecimales.\n"
+                        "<#AAAAAA>Ejemplo: 694a084d0bde2d163e1191d3\n"
+                        "<#FFFFFF>Intenta de nuevo:")
                     return
 
                 del buy_sessions[user_id]
@@ -807,14 +805,11 @@ class BotHoster(BaseBot):
                     f"{DIVIDER}")
                 return
 
-            # Validar Room ID contra la WebAPI
-            await self.highrise.send_message(conversation_id, "<#AAAAAA>⏳ Verificando sala...")
-            try:
-                await self.webapi.get_room(room_id_v)
-            except Exception:
+            # Validar formato del Room ID (24 caracteres hex — ObjectID de MongoDB)
+            if not re.match(r'^[a-f0-9]{24}$', room_id_v):
                 await self.highrise.send_message(conversation_id,
-                    "<#E74C3C>❌ Room ID inválido o sala no encontrada.\n"
-                    "<#FFFFFF>Verifica el ID y vuelve a intentarlo.")
+                    "<#E74C3C>❌ Room ID inválido. Debe tener 24 caracteres hexadecimales.\n"
+                    "<#AAAAAA>Ejemplo: 694a084d0bde2d163e1191d3")
                 return
 
             await self.highrise.send_message(conversation_id, "<#AAAAAA>⏳ Desplegando tu bot...")
