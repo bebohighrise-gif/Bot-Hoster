@@ -402,9 +402,10 @@ class BotHoster(BaseBot):
 
         # ── Flujo paso a paso: !buy ───────────────────────────────
         if user_id in buy_sessions:
-            session = buy_sessions[user_id]
-            step    = session["step"]
-            cat     = session["category"]
+            session  = buy_sessions[user_id]
+            step     = session["step"]
+            cat      = session["category"]
+            is_admin = (user_id == HOSTER_OWNER_ID)
 
             if text.startswith("!"):
                 await self.highrise.send_message(conversation_id,
@@ -428,7 +429,7 @@ class BotHoster(BaseBot):
                                price=chosen[3], step=2)
 
                 fresh = db.get_or_create_user(user_id)
-                if fresh["balance"] < chosen[3]:
+                if not is_admin and fresh["balance"] < chosen[3]:
                     missing = chosen[3] - fresh["balance"]
                     del buy_sessions[user_id]
                     await self.highrise.send_message(conversation_id,
@@ -489,7 +490,7 @@ class BotHoster(BaseBot):
                 del buy_sessions[user_id]
 
                 fresh = db.get_or_create_user(user_id)
-                if fresh["balance"] < price:
+                if not is_admin and fresh["balance"] < price:
                     missing = price - fresh["balance"]
                     await self.highrise.send_message(conversation_id,
                         f"<#E74C3C>🛑 TRANSACCIÓN RECHAZADA\n\n"
@@ -510,7 +511,8 @@ class BotHoster(BaseBot):
                 dur_param = None if duration == "perm" else duration
                 success, proc = deploy_bot_instance(user_id, cat, room_id_val, token_val)
                 if success:
-                    db.update_gold(user_id, -price)
+                    if not is_admin:
+                        db.update_gold(user_id, -price)
                     bot_id_new, exp_date = db.create_bot_entry(
                         user_id, cat, room_id_val, token_val, duration_str=dur_param)
                     if proc:
