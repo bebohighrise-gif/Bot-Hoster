@@ -371,6 +371,38 @@ def get_next_pending_ticket():
     return None
 
 
+def get_all_pending_tickets():
+    """Devuelve todos los tickets pendientes ordenados por fecha."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, user_id, username, message, created_at
+        FROM tickets
+        WHERE status = 'pending'
+        ORDER BY created_at ASC
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "user_id": r[1], "username": r[2],
+             "message": r[3], "created_at": r[4]} for r in rows]
+
+
+def get_ticket_by_id(ticket_id: int):
+    """Devuelve un ticket por su ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, user_id, username, message, created_at, status
+        FROM tickets WHERE id = ?
+    """, (ticket_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {"id": row[0], "user_id": row[1], "username": row[2],
+                "message": row[3], "created_at": row[4], "status": row[5]}
+    return None
+
+
 def mark_ticket_resolved(ticket_id: int):
     conn = get_connection()
     cursor = conn.cursor()

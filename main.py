@@ -1089,48 +1089,65 @@ class BotHoster(BaseBot):
                 await self.highrise.send_message(conversation_id, msg)
 
         elif cmd == "!tickets":
-            ticket = db.get_next_pending_ticket()
-            if not ticket:
+            tickets = db.get_all_pending_tickets()
+            if not tickets:
                 await self.highrise.send_message(conversation_id,
                     "<#2ECC71>✅ No hay tickets pendientes. ¡Todo en orden!")
             else:
+                lines = ""
+                for t in tickets:
+                    # Truncar mensaje largo para que quepa en el listado
+                    preview = t['message'][:60] + ("…" if len(t['message']) > 60 else "")
+                    lines += (
+                        f"<#00FFFF>[#{t['id']}] <#FFFFFF>Usuario: <#85E3FF>{t['user_id']}\n"
+                        f"<#AAAAAA>  └ {preview}\n"
+                    )
                 await self.highrise.send_message(conversation_id,
-                    f"<#FFD700>📩 NEX-HOST <#FFFFFF>│ <#FF69B4>TICKET DE SOPORTE PENDIENTE\n\n"
-                    f"<#85E3FF>👤 CLIENTE <#FFFFFF>: <#00FFFF>{ticket['user_id']}\n"
-                    f"<#85E3FF>📅 FECHA   <#FFFFFF>: <#AAAAAA>{ticket['created_at']} UTC\n"
-                    f"<#85E3FF>💬 MENSAJE <#FFFFFF>:\n"
-                    f"<#FFFFFF>» <#85E3FF>{ticket['message']}\n\n"
-                    f"<#2ECC71>✍️ Responder con: <#FFFFFF>!responder {ticket['user_id']} <tu respuesta>\n"
+                    f"<#FFD700>📩 NEX-HOST <#FFFFFF>│ <#FF69B4>TICKETS PENDIENTES "
+                    f"<#FFFFFF>({len(tickets)})\n\n"
+                    f"{lines}\n"
+                    f"<#2ECC71>✍️ Usa: <#FFFFFF>!responder <#ticket> <mensaje>\n"
+                    f"<#AAAAAA>Ejemplo: !responder {tickets[0]['id']} Hola, te ayudo ahora.\n"
                     f"{DIVIDER}")
 
         elif cmd == "!responder":
-            if len(parts) < 3:
+            if len(parts) < 3 or not parts[1].isdigit():
                 await self.highrise.send_message(conversation_id,
-                    "<#E74C3C>❌ Sintaxis: <#FFFFFF>!responder <user_id> <mensaje>")
+                    "<#E74C3C>❌ Sintaxis: <#FFFFFF>!responder <#ticket> <mensaje>\n"
+                    "<#AAAAAA>Ejemplo: !responder 3 Tu bot ya está listo.")
                 return
-            target_id    = parts[1]
+            ticket_id    = int(parts[1])
             response_msg = " ".join(parts[2:])
-            ticket = db.get_pending_ticket_by_user(target_id)
-            if ticket:
-                db.mark_ticket_resolved(ticket["id"])
+            ticket = db.get_ticket_by_id(ticket_id)
+            if not ticket:
+                await self.highrise.send_message(conversation_id,
+                    f"<#E74C3C>❌ Ticket <#00FFFF>#{ticket_id} <#FFFFFF>no encontrado.")
+                return
+            if ticket["status"] != "pending":
+                await self.highrise.send_message(conversation_id,
+                    f"<#E74C3C>⚠️ El ticket <#00FFFF>#{ticket_id} <#FFFFFF>ya fue resuelto.")
+                return
+            target_id = ticket["user_id"]
+            db.mark_ticket_resolved(ticket_id)
             conv_id = user_conversations.get(target_id) or db.get_conversation_id(target_id)
             if conv_id:
                 try:
                     await self.highrise.send_message(conv_id,
                         f"<#FFD700>👑 NEX-HOST <#FFFFFF>│ <#2ECC71>RESPUESTA DE SOPORTE\n\n"
                         f"<#2ECC71>✍️ Admin <#FFFFFF>: {response_msg}\n\n"
-                        f"<#AAAAAA>💬 Si necesitas más ayuda, responde enviando un mensaje con "
-                        f"<#FFFFFF>!soporte\n"
+                        f"<#AAAAAA>💬 Si necesitas más ayuda escribe <#FFFFFF>!soporte\n"
                         f"{DIVIDER}")
                     await self.highrise.send_message(conversation_id,
-                        f"<#2ECC71>✅ Respuesta enviada con éxito al cliente <#00FFFF>{target_id}")
+                        f"<#2ECC71>✅ Ticket <#00FFFF>#{ticket_id} <#2ECC71>resuelto. "
+                        f"Respuesta enviada a <#00FFFF>{target_id}<#2ECC71>.")
                 except Exception as e:
                     await self.highrise.send_message(conversation_id,
                         f"<#E74C3C>❌ Error al enviar respuesta: {e}")
             else:
                 await self.highrise.send_message(conversation_id,
                     f"<#E74C3C>⚠️ No hay conversación activa con <#00FFFF>{target_id}<#FFFFFF>.\n"
-                    f"<#AAAAAA>El usuario debe enviar un mensaje primero.")
+                    f"<#AAAAAA>El usuario debe enviar un mensaje primero.\n"
+                    f"<#AAAAAA>(Ticket <#00FFFF>#{ticket_id} <#AAAAAA>marcado como resuelto de todas formas.)")
 
         elif cmd == "!addtime":
             if len(parts) != 3:
