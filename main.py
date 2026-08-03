@@ -1113,7 +1113,7 @@ class BotHoster(BaseBot):
             ticket = db.get_pending_ticket_by_user(target_id)
             if ticket:
                 db.mark_ticket_resolved(ticket["id"])
-            conv_id = user_conversations.get(target_id)
+            conv_id = user_conversations.get(target_id) or db.get_conversation_id(target_id)
             if conv_id:
                 try:
                     await self.highrise.send_message(conv_id,

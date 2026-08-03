@@ -103,6 +103,16 @@ def get_all_users_with_conversations():
     return rows
 
 
+def get_conversation_id(user_id: str):
+    """Devuelve el conversation_id guardado en BD para un usuario, o None."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT conversation_id FROM users WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row and row[0] else None
+
+
 def get_or_create_user(user_id: str, username: str = "Usuario"):
     conn = get_connection()
     cursor = conn.cursor()
