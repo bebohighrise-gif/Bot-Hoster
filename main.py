@@ -900,6 +900,14 @@ class BotHoster(BaseBot):
                 f"{DIVIDER}")
 
     # ── !soporte ──────────────────────────────────────────────────────
+    async def get_username(self, user_id: str) -> str:
+        """Convierte un user_id en su username usando la WebAPI. Devuelve el user_id si falla."""
+        try:
+            user_info = await self.highrise.webapi.get_user(user_id)
+            return user_info.user.username
+        except Exception:
+            return user_id
+
     async def _handle_soporte(self, user_id: str, conversation_id: str, parts: list) -> None:
         if len(parts) < 2:
             await self.highrise.send_message(conversation_id,
@@ -1102,42 +1110,38 @@ class BotHoster(BaseBot):
                 await self.highrise.send_message(conversation_id,
                     f"<#FFD700>📩 NEX-HOST <#FFFFFF>│ <#FF69B4>TICKETS PENDIENTES "
                     f"<#FFFFFF>({len(tickets)})\n"
-                    f"<#AAAAAA>Usa <#FFFFFF>!responder <#ticket> <mensaje> <#AAAAAA>para responder.")
-                for t in tickets:
+                    f"<#AAAAAA>Usa <#FFFFFF>!responder <posición> <mensaje> <#AAAAAA>para responder.")
+                for pos, t in enumerate(tickets, start=1):
+                    username = t['username'] or await self.get_username(t['user_id'])
                     await self.highrise.send_message(conversation_id,
-                        f"<#00FFFF>━━━ Ticket #{t['id']} ━━━\n"
-                        f"<#85E3FF>👤 Usuario  <#FFFFFF>: <#00FFFF>{t['user_id']}\n"
+                        f"<#00FFFF>━━━ Ticket #{pos} ━━━\n"
+                        f"<#85E3FF>👤 Usuario  <#FFFFFF>: <#00FFFF>@{username}\n"
                         f"<#85E3FF>📅 Fecha    <#FFFFFF>: <#AAAAAA>{t['created_at']} UTC\n"
                         f"<#85E3FF>💬 Mensaje  <#FFFFFF>:\n"
                         f"<#FFFFFF>» <#85E3FF>{t['message']}\n"
-                        f"<#2ECC71>↩ !responder {t['id']} <tu respuesta>\n"
+                        f"<#2ECC71>↩ !responder {pos} <tu respuesta>\n"
                         f"{DIVIDER}")
 
         elif cmd == "!responder":
             if len(parts) < 3 or not parts[1].isdigit():
                 await self.highrise.send_message(conversation_id,
-                    "<#E74C3C>❌ Sintaxis: <#FFFFFF>!responder <#ticket> <mensaje>\n"
-                    "<#AAAAAA>Ejemplo: !responder 3 Tu bot ya está listo.")
+                    "<#E74C3C>❌ Sintaxis: <#FFFFFF>!responder <posición> <mensaje>\n"
+                    "<#AAAAAA>Ejemplo: !responder 1 Tu bot ya está listo.")
                 return
-            ticket_id    = int(parts[1])
+            pos          = int(parts[1])
             response_msg = " ".join(parts[2:])
-            ticket = db.get_ticket_by_id(ticket_id)
-            if not ticket:
+            # Buscar por posición en la lista de pendientes (1 = más antiguo)
+            pending = db.get_all_pending_tickets()
+            if pos < 1 or pos > len(pending):
                 await self.highrise.send_message(conversation_id,
-                    f"<#E74C3C>❌ Ticket <#00FFFF>#{ticket_id} <#FFFFFF>no encontrado.")
+                    f"<#E74C3C>❌ No existe el ticket en posición <#00FFFF>#{pos}<#FFFFFF>. "
+                    f"Hay <#00FFFF>{len(pending)}<#FFFFFF> ticket(s) pendiente(s).")
                 return
-            if ticket["status"] != "pending":
-                await self.highrise.send_message(conversation_id,
-                    f"<#E74C3C>⚠️ El ticket <#00FFFF>#{ticket_id} <#FFFFFF>ya fue resuelto.")
-                return
+            ticket    = pending[pos - 1]
+            ticket_id = ticket["id"]
             target_id = ticket["user_id"]
             db.mark_ticket_resolved(ticket_id)
-            # Obtener nombre de usuario real
-            try:
-                user_info = await self.highrise.webapi.get_user(target_id)
-                display_name = user_info.user.username
-            except Exception:
-                display_name = target_id
+            display_name = ticket["username"] or await self.get_username(target_id)
             conv_id = user_conversations.get(target_id) or db.get_conversation_id(target_id)
             if conv_id:
                 try:
@@ -1158,16 +1162,16 @@ class BotHoster(BaseBot):
                         f"<#FFFFFF>└── <#FF69B4>Detalle<#FFFFFF>: {response_msg}\n\n"
                         f"{random.choice(_cierres)}")
                     await self.highrise.send_message(conversation_id,
-                        f"<#2ECC71>✅ Ticket <#00FFFF>#{ticket_id} <#2ECC71>resuelto. "
+                        f"<#2ECC71>✅ Ticket <#00FFFF>#{pos} <#2ECC71>resuelto. "
                         f"Respuesta enviada a <#00FFFF>@{display_name}<#2ECC71>.")
                 except Exception as e:
                     await self.highrise.send_message(conversation_id,
                         f"<#E74C3C>❌ Error al enviar respuesta: {e}")
             else:
                 await self.highrise.send_message(conversation_id,
-                    f"<#E74C3C>⚠️ No hay conversación activa con <#00FFFF>{target_id}<#FFFFFF>.\n"
+                    f"<#E74C3C>⚠️ No hay conversación activa con <#00FFFF>@{display_name}<#FFFFFF>.\n"
                     f"<#AAAAAA>El usuario debe enviar un mensaje primero.\n"
-                    f"<#AAAAAA>(Ticket <#00FFFF>#{ticket_id} <#AAAAAA>marcado como resuelto de todas formas.)")
+                    f"<#AAAAAA>(Ticket <#00FFFF>#{pos} <#AAAAAA>marcado como resuelto de todas formas.)")
 
         elif cmd == "!addtime":
             if len(parts) != 3:
