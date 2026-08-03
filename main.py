@@ -1,8 +1,10 @@
 import os
+import sys
 import shutil
 import subprocess
 import asyncio
 import re
+import json
 from datetime import datetime
 from highrise import BaseBot, User, Position, AnchorPosition
 from highrise.models import SessionMetadata, CurrencyItem
@@ -85,8 +87,26 @@ def template_exists(bot_type: str) -> bool:
 
 
 def _write_instance_config(instance_path: str, room_id: str, api_token: str, owner_id: str):
-    config_path = os.path.join(instance_path, "config.py")
-    with open(config_path, "w", encoding="utf-8") as f:
+    # Escribe config.json (formato que leen los templates)
+    cfg_json_path = os.path.join(instance_path, "config.json")
+    existing = {}
+    if os.path.exists(cfg_json_path):
+        try:
+            with open(cfg_json_path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        except Exception:
+            existing = {}
+    existing.update({
+        "api_token": api_token,
+        "room_id": room_id,
+        "owner_id": owner_id,
+        "hoster_owner_id": HOSTER_OWNER_ID,
+    })
+    with open(cfg_json_path, "w", encoding="utf-8") as f:
+        json.dump(existing, f, indent=4)
+    # Escribe también config.py por compatibilidad con templates que lo usen
+    cfg_py_path = os.path.join(instance_path, "config.py")
+    with open(cfg_py_path, "w", encoding="utf-8") as f:
         f.write(
             "# CONFIGURACIÓN GENERADA AUTOMÁTICAMENTE POR BOT HOSTER\n"
             f'ROOM_ID = "{room_id}"\n'
@@ -111,7 +131,19 @@ def deploy_bot_instance(user_id: str, bot_type: str, room_id: str, api_token: st
     _write_instance_config(instance_path, room_id, api_token, user_id)
 
     try:
-        proc = subprocess.Popen(["python", "run.py"], cwd=instance_path)
+        proc = subprocess.Popen(
+            [sys.executable, "run.py"],
+            cwd=instance_path,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        # Espera brevemente y verifica que el proceso no haya muerto de inmediato
+        import time
+        time.sleep(2)
+        if proc.poll() is not None:
+            out, _ = proc.communicate()
+            print(f"🔴 Bot {bot_type} murió al arrancar (código {proc.returncode}):\n{out.decode(errors='replace')[:500]}")
+            return False, None
         print(f"🟢 Bot {bot_type} desplegado para {user_id} (PID {proc.pid})")
         return True, proc
     except Exception as e:
@@ -135,7 +167,18 @@ def redeploy_bot(bot_id: int, owner_id: str, category: str, room_id: str, api_to
     _write_instance_config(instance_path, room_id, api_token, owner_id)
 
     try:
-        proc = subprocess.Popen(["python", "run.py"], cwd=instance_path)
+        import time
+        proc = subprocess.Popen(
+            [sys.executable, "run.py"],
+            cwd=instance_path,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        time.sleep(2)
+        if proc.poll() is not None:
+            out, _ = proc.communicate()
+            print(f"🔴 Bot {category} murió al relanzar (código {proc.returncode}):\n{out.decode(errors='replace')[:500]}")
+            return False, None
         running_processes[bot_id] = proc
         print(f"🔄 Bot ID {bot_id} relanzado (PID {proc.pid})")
         return True, proc
@@ -487,6 +530,17 @@ class BotHoster(BaseBot):
                 duration    = session["duration"]
                 price       = session["price"]
                 dur_label   = session["dur_label"]
+
+                # Validar Room ID contra la WebAPI antes de continuar
+                await self.highrise.send_message(conversation_id, "<#AAAAAA>⏳ Verificando sala...")
+                try:
+                    await self.webapi.get_room(room_id_val)
+                except Exception:
+                    await self.highrise.send_message(conversation_id,
+                        "<#E74C3C>❌ Room ID inválido o sala no encontrada.\n"
+                        "<#FFFFFF>Verifica el ID e intenta de nuevo:")
+                    return
+
                 del buy_sessions[user_id]
 
                 fresh = db.get_or_create_user(user_id)
@@ -710,6 +764,16 @@ class BotHoster(BaseBot):
                     f"<#FFFFFF>├── <#85E3FF>Tu Saldo Actual<#FFFFFF>: <#FFD700>{fresh['balance']:,} Oro\n"
                     f"<#FFFFFF>└── <#E74C3C>Saldo Faltante <#FFFFFF>: <#E74C3C>{missing:,} Oro\n"
                     f"{DIVIDER}")
+                return
+
+            # Validar Room ID contra la WebAPI
+            await self.highrise.send_message(conversation_id, "<#AAAAAA>⏳ Verificando sala...")
+            try:
+                await self.webapi.get_room(room_id_v)
+            except Exception:
+                await self.highrise.send_message(conversation_id,
+                    "<#E74C3C>❌ Room ID inválido o sala no encontrada.\n"
+                    "<#FFFFFF>Verifica el ID y vuelve a intentarlo.")
                 return
 
             await self.highrise.send_message(conversation_id, "<#AAAAAA>⏳ Desplegando tu bot...")

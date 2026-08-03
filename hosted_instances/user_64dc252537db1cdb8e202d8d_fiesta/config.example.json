@@ -1,0 +1,45 @@
+{
+  "api_token": "TU_API_TOKEN_BOT_PRINCIPAL_AQUI",
+  "room_id": "TU_ROOM_ID_AQUI",
+  "owner_id": "TU_OWNER_ID_AQUI",
+  "admin_ids": ["ID_ADMIN_1", "ID_ADMIN_2"],
+  "moderator_ids": [],
+  "vip_zone": {
+    "x": 16.0,
+    "y": 17.0,
+    "z": 19.0
+  },
+  "dj_zone": {
+    "x": 15.5,
+    "y": 16.0,
+    "z": 2.5
+  },
+  "directivo_zone": {
+    "x": 5.0,
+    "y": 17.5,
+    "z": 4.5
+  },
+  "forbidden_zones": [
+    {
+      "x": 10,
+      "y": 0,
+      "z": 10,
+      "radius": 3
+    },
+    {
+      "x": -10,
+      "y": 0,
+      "z": -10,
+      "radius": 3
+    }
+  ],
+  "bot_wallet": 1000,
+  "announcement_interval": 300,
+  "bot_initial_outfit": "custom_nocturno",
+  "bot_initial_emote": "dance-orangejustice",
+  "spawn_point": {
+    "x": 9.5,
+    "y": 4.25,
+    "z": 23.5
+  }
+}

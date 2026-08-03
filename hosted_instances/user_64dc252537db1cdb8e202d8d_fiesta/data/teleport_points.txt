@@ -1,0 +1,5 @@
+# Puntos de teletransporte (nombre|x|y|z)
+bar|6.5|7.0|4.5
+carcel|50.0|50.0|50.0
+p2|12.5|12.0|16.5
+pista|11.5|4.25|23.5

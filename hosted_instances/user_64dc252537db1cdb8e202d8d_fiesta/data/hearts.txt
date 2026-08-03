@@ -1,0 +1,4 @@
+# Corazones de usuarios (user_id:hearts:username)
+64dc252537db1cdb8e202d8d:208:_Kmi.77
+66775dee04dd7791c7de94e9:2:nenitabo
+65db9c4e0cac25b88b0c62e4:101:unicorniooooo

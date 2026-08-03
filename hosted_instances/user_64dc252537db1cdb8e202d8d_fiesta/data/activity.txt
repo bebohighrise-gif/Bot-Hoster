@@ -1,0 +1,4 @@
+# Actividad de usuarios (user_id:messages:last_activity:username)
+64dc252537db1cdb8e202d8d:54:2025-12-29T21:56:17.739909:_Kmi.77
+68bc8edd6eceda8985f80e9c:25:2025-12-29T21:54:22.647914:CANTINERO_BOT
+65db9c4e0cac25b88b0c62e4:14:2025-12-29T21:56:05.134817:unicorniooooo

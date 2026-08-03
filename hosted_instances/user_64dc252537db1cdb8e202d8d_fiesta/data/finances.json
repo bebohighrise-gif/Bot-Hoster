@@ -1,0 +1,17 @@
+{
+  "saldo": 2,
+  "transacciones": [
+    {
+      "tipo": "abono_deuda",
+      "usuario": "_Kmi.77",
+      "cantidad": 1,
+      "fecha": "2025-12-21T06:08:29.988727"
+    },
+    {
+      "tipo": "pago_deuda",
+      "usuario": "_Kmi.77",
+      "cantidad": 1,
+      "fecha": "2025-12-21T06:08:54.248369"
+    }
+  ]
+}
