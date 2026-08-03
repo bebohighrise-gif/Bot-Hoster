@@ -1094,21 +1094,19 @@ class BotHoster(BaseBot):
                 await self.highrise.send_message(conversation_id,
                     "<#2ECC71>✅ No hay tickets pendientes. ¡Todo en orden!")
             else:
-                lines = ""
-                for t in tickets:
-                    # Truncar mensaje largo para que quepa en el listado
-                    preview = t['message'][:60] + ("…" if len(t['message']) > 60 else "")
-                    lines += (
-                        f"<#00FFFF>[#{t['id']}] <#FFFFFF>Usuario: <#85E3FF>{t['user_id']}\n"
-                        f"<#AAAAAA>  └ {preview}\n"
-                    )
                 await self.highrise.send_message(conversation_id,
                     f"<#FFD700>📩 NEX-HOST <#FFFFFF>│ <#FF69B4>TICKETS PENDIENTES "
-                    f"<#FFFFFF>({len(tickets)})\n\n"
-                    f"{lines}\n"
-                    f"<#2ECC71>✍️ Usa: <#FFFFFF>!responder <#ticket> <mensaje>\n"
-                    f"<#AAAAAA>Ejemplo: !responder {tickets[0]['id']} Hola, te ayudo ahora.\n"
-                    f"{DIVIDER}")
+                    f"<#FFFFFF>({len(tickets)})\n"
+                    f"<#AAAAAA>Usa <#FFFFFF>!responder <#ticket> <mensaje> <#AAAAAA>para responder.")
+                for t in tickets:
+                    await self.highrise.send_message(conversation_id,
+                        f"<#00FFFF>━━━ Ticket #{t['id']} ━━━\n"
+                        f"<#85E3FF>👤 Usuario  <#FFFFFF>: <#00FFFF>{t['user_id']}\n"
+                        f"<#85E3FF>📅 Fecha    <#FFFFFF>: <#AAAAAA>{t['created_at']} UTC\n"
+                        f"<#85E3FF>💬 Mensaje  <#FFFFFF>:\n"
+                        f"<#FFFFFF>» <#85E3FF>{t['message']}\n"
+                        f"<#2ECC71>↩ !responder {t['id']} <tu respuesta>\n"
+                        f"{DIVIDER}")
 
         elif cmd == "!responder":
             if len(parts) < 3 or not parts[1].isdigit():
