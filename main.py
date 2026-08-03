@@ -905,8 +905,13 @@ class BotHoster(BaseBot):
             await self.highrise.send_message(conversation_id,
                 "<#E74C3C>❌ Sintaxis: <#FFFFFF>!soporte <tu mensaje al admin>")
             return
-        mensaje   = " ".join(parts[1:])
-        ticket_id = db.create_ticket(user_id, user_id, mensaje)
+        mensaje = " ".join(parts[1:])
+        try:
+            user_info = await self.webapi.get_user(user_id)
+            username  = user_info.username
+        except Exception:
+            username = user_id
+        ticket_id = db.create_ticket(user_id, username, mensaje)
         await self.highrise.send_message(conversation_id,
             f"<#2ECC71>📩 TICKET REGISTRADO CON ÉXITO\n"
             f"<#FFFFFF>├── <#85E3FF>Número de Ticket<#FFFFFF>: <#00FFFF>#{ticket_id}\n"
@@ -1127,18 +1132,24 @@ class BotHoster(BaseBot):
                 return
             target_id = ticket["user_id"]
             db.mark_ticket_resolved(ticket_id)
+            # Obtener nombre de usuario real
+            try:
+                user_info = await self.webapi.get_user(target_id)
+                display_name = user_info.username
+            except Exception:
+                display_name = target_id
             conv_id = user_conversations.get(target_id) or db.get_conversation_id(target_id)
             if conv_id:
                 try:
                     await self.highrise.send_message(conv_id,
                         f"<#FFD700>🛡️ [ NEX-HOST ] ── SYSTEM SUPPORT\n\n"
-                        f"<#00FFFF>Estimado/a @{target_id}:\n\n"
+                        f"<#00FFFF>Estimado/a @{display_name}:\n\n"
                         f"<#FFFFFF>├── <#85E3FF>Estado  <#FFFFFF>: <#2ECC71>Atendido\n"
                         f"<#FFFFFF>└── <#FF69B4>Detalle <#FFFFFF>: {response_msg}\n\n"
                         f"<#FFD700>✨ ¡Tu tranquilidad y tus salas son nuestra prioridad!")
                     await self.highrise.send_message(conversation_id,
                         f"<#2ECC71>✅ Ticket <#00FFFF>#{ticket_id} <#2ECC71>resuelto. "
-                        f"Respuesta enviada a <#00FFFF>{target_id}<#2ECC71>.")
+                        f"Respuesta enviada a <#00FFFF>@{display_name}<#2ECC71>.")
                 except Exception as e:
                     await self.highrise.send_message(conversation_id,
                         f"<#E74C3C>❌ Error al enviar respuesta: {e}")
