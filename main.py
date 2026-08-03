@@ -907,8 +907,8 @@ class BotHoster(BaseBot):
             return
         mensaje = " ".join(parts[1:])
         try:
-            user_info = await self.webapi.get_user(user_id)
-            username  = user_info.username
+            user_info = await self.highrise.webapi.get_user(user_id)
+            username  = user_info.user.username
         except Exception:
             username = user_id
         ticket_id = db.create_ticket(user_id, username, mensaje)
@@ -1134,8 +1134,8 @@ class BotHoster(BaseBot):
             db.mark_ticket_resolved(ticket_id)
             # Obtener nombre de usuario real
             try:
-                user_info = await self.webapi.get_user(target_id)
-                display_name = user_info.username
+                user_info = await self.highrise.webapi.get_user(target_id)
+                display_name = user_info.user.username
             except Exception:
                 display_name = target_id
             conv_id = user_conversations.get(target_id) or db.get_conversation_id(target_id)
