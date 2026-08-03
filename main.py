@@ -439,6 +439,16 @@ class BotHoster(BaseBot):
                         f"<#FFFFFF>🤖 Bot ID: <#00FFFF>{bot_id_new}\n"
                         f"<#FFFFFF>⏱️ Tiempo: <#FFD700>{duration}\n"
                         f"<#FFFFFF>📅 Expiración: <#2ECC71>{exp_date} UTC")
+                    # Enviar invitación de sala al usuario que recibe el regalo
+                    target_conv = (user_conversations.get(data["target_user"])
+                                   or db.get_conversation_id(data["target_user"]))
+                    if target_conv:
+                        try:
+                            await self.highrise.send_message(
+                                target_conv, "¡Tu bot está listo! Únete a tu sala:",
+                                message_type="invite", room_id=data["room_id"])
+                        except Exception:
+                            pass
                 else:
                     await self.highrise.send_message(conversation_id,
                         "<#E74C3C>❌ Error al desplegar la plantilla.")
@@ -579,6 +589,12 @@ class BotHoster(BaseBot):
                         f"<#FFD700>⚠️ IMPORTANTE<#FFFFFF>: Recuerda dar permisos de "
                         f"<#00FFFF>Moderador <#FFFFFF>y <#00FFFF>Diseñador <#FFFFFF>al bot en tu sala.\n"
                         f"{DIVIDER}")
+                    try:
+                        await self.highrise.send_message(
+                            conversation_id, "¡Únete a tu sala ahora!",
+                            message_type="invite", room_id=room_id_val)
+                    except Exception:
+                        pass
                 else:
                     await self.highrise.send_message(conversation_id,
                         "<#E74C3C>❌ Error crítico al desplegar. Verifica token y Room ID.")
@@ -830,6 +846,12 @@ class BotHoster(BaseBot):
                     f"<#FFD700>⚠️ IMPORTANTE<#FFFFFF>: Recuerda dar permisos de "
                     f"<#00FFFF>Moderador <#FFFFFF>y <#00FFFF>Diseñador <#FFFFFF>al bot en tu sala.\n"
                     f"{DIVIDER}")
+                try:
+                    await self.highrise.send_message(
+                        conversation_id, "¡Únete a tu sala ahora!",
+                        message_type="invite", room_id=room_id_v)
+                except Exception:
+                    pass
             else:
                 await self.highrise.send_message(conversation_id,
                     "<#E74C3C>❌ Error crítico al desplegar. Verifica token y Room ID.")
