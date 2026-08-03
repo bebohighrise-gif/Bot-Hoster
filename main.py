@@ -1144,8 +1144,8 @@ class BotHoster(BaseBot):
                     await self.highrise.send_message(conv_id,
                         f"<#FFD700>🛡️ [ NEX-HOST ] ── SYSTEM SUPPORT\n\n"
                         f"<#00FFFF>Estimado/a @{display_name}:\n\n"
-                        f"<#FFFFFF>├── <#85E3FF>Estado  <#FFFFFF>: <#2ECC71>Atendido\n"
-                        f"<#FFFFFF>└── <#FF69B4>Detalle <#FFFFFF>: {response_msg}\n\n"
+                        f"<#FFFFFF>├── <#85E3FF>Estado<#FFFFFF>: <#2ECC71>Atendido\n"
+                        f"<#FFFFFF>└── <#FF69B4>Detalle<#FFFFFF>: {response_msg}\n\n"
                         f"<#FFD700>✨ ¡Tu tranquilidad y tus salas son nuestra prioridad!")
                     await self.highrise.send_message(conversation_id,
                         f"<#2ECC71>✅ Ticket <#00FFFF>#{ticket_id} <#2ECC71>resuelto. "
