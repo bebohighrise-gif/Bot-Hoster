@@ -1142,44 +1142,21 @@ class BotHoster(BaseBot):
             if conv_id:
                 try:
                     import random
-                    _support_templates = [
-                        (
-                            f"<#FFD700>🛡️ [ NEX-HOST ] ── SYSTEM SUPPORT\n\n"
-                            f"<#00FFFF>Estimado/a @{display_name}:\n\n"
-                            f"<#FFFFFF>├── <#85E3FF>Estado<#FFFFFF>: <#2ECC71>Atendido\n"
-                            f"<#FFFFFF>└── <#FF69B4>Detalle<#FFFFFF>: {response_msg}\n\n"
-                            f"<#FFD700>✨ ¡Tu tranquilidad y tus salas son nuestra prioridad!"
-                        ),
-                        (
-                            f"<#FFD700>💼 [ NEX-HOST ] ── SOPORTE TÉCNICO\n\n"
-                            f"<#00FFFF>Hola @{display_name}, hemos revisado tu caso:\n\n"
-                            f"<#FFFFFF>├── <#85E3FF>Estado<#FFFFFF>: <#2ECC71>✅ Resuelto\n"
-                            f"<#FFFFFF>└── <#FF69B4>Respuesta<#FFFFFF>: {response_msg}\n\n"
-                            f"<#FFD700>🌟 Gracias por confiar en Nex-Host. ¡Estamos para servirte!"
-                        ),
-                        (
-                            f"<#FFD700>📋 [ NEX-HOST ] ── CENTRO DE AYUDA\n\n"
-                            f"<#00FFFF>@{display_name}, tu ticket ha sido procesado:\n\n"
-                            f"<#FFFFFF>├── <#85E3FF>Estado<#FFFFFF>: <#2ECC71>Atendido ✔\n"
-                            f"<#FFFFFF>└── <#FF69B4>Detalle<#FFFFFF>: {response_msg}\n\n"
-                            f"<#FFD700>💫 Si necesitas más ayuda, usa <#FFFFFF>!soporte<#FFD700> en cualquier momento."
-                        ),
-                        (
-                            f"<#FFD700>🔔 [ NEX-HOST ] ── RESPUESTA OFICIAL\n\n"
-                            f"<#00FFFF>Estimado/a @{display_name}:\n\n"
-                            f"<#FFFFFF>├── <#85E3FF>Ticket<#FFFFFF>: <#2ECC71>Cerrado\n"
-                            f"<#FFFFFF>└── <#FF69B4>Información<#FFFFFF>: {response_msg}\n\n"
-                            f"<#FFD700>🛡️ Nex-Host — Hosting premium, servicio de calidad."
-                        ),
-                        (
-                            f"<#FFD700>⚡ [ NEX-HOST ] ── ATENCIÓN AL CLIENTE\n\n"
-                            f"<#00FFFF>¡Buenas, @{display_name}! Aquí va tu respuesta:\n\n"
-                            f"<#FFFFFF>├── <#85E3FF>Estado<#FFFFFF>: <#2ECC71>Resuelto ✅\n"
-                            f"<#FFFFFF>└── <#FF69B4>Mensaje<#FFFFFF>: {response_msg}\n\n"
-                            f"<#FFD700>✨ ¡Tu experiencia es lo que nos impulsa a mejorar!"
-                        ),
+                    _cierres = [
+                        "<#FFD700>✨ ¡Tu tranquilidad y tus salas son nuestra prioridad!",
+                        "<#FFD700>🌟 Gracias por confiar en Nex-Host. ¡Estamos para servirte!",
+                        "<#FFD700>💫 Recuerda que puedes escribir <#FFFFFF>!soporte<#FFD700> cuando lo necesites.",
+                        "<#FFD700>🛡️ Nex-Host — Hosting premium, servicio de calidad.",
+                        "<#FFD700>⚡ ¡Tu experiencia es lo que nos impulsa a mejorar cada día!",
+                        "<#FFD700>🎯 Siempre estaremos aquí para apoyarte. ¡Hasta pronto!",
+                        "<#FFD700>💎 En Nex-Host tu satisfacción es nuestra misión.",
                     ]
-                    await self.highrise.send_message(conv_id, random.choice(_support_templates))
+                    await self.highrise.send_message(conv_id,
+                        f"<#FFD700>🛡️ [ NEX-HOST ] ── SYSTEM SUPPORT\n\n"
+                        f"<#00FFFF>Estimado/a @{display_name}:\n\n"
+                        f"<#FFFFFF>├── <#85E3FF>Estado<#FFFFFF>: <#2ECC71>Atendido\n"
+                        f"<#FFFFFF>└── <#FF69B4>Detalle<#FFFFFF>: {response_msg}\n\n"
+                        f"{random.choice(_cierres)}")
                     await self.highrise.send_message(conversation_id,
                         f"<#2ECC71>✅ Ticket <#00FFFF>#{ticket_id} <#2ECC71>resuelto. "
                         f"Respuesta enviada a <#00FFFF>@{display_name}<#2ECC71>.")
