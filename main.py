@@ -903,7 +903,7 @@ class BotHoster(BaseBot):
     async def get_username(self, user_id: str) -> str:
         """Convierte un user_id en su username usando la WebAPI. Devuelve el user_id si falla."""
         try:
-            user_info = await self.highrise.webapi.get_user(user_id)
+            user_info = await self.webapi.get_user(user_id)
             return user_info.user.username
         except Exception:
             return user_id
@@ -915,7 +915,7 @@ class BotHoster(BaseBot):
             return
         mensaje = " ".join(parts[1:])
         try:
-            user_info = await self.highrise.webapi.get_user(user_id)
+            user_info = await self.webapi.get_user(user_id)
             username  = user_info.user.username
         except Exception:
             username = user_id
