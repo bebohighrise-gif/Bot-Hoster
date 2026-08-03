@@ -17,6 +17,7 @@ db.init_db()
 # ── Estado en memoria ─────────────────────────────────────────────────
 gift_sessions       = {}  # {user_id: {step, ...}}
 buy_sessions        = {}  # {user_id: {step, category, ...}}
+delete_sessions     = {}  # {user_id: {bot_id, cat, pos}}
 user_conversations  = {}  # {user_id: conversation_id}
 active_announcement = {}  # {message, interval, task}
 running_processes   = {}  # {bot_id: subprocess.Popen}
@@ -286,6 +287,7 @@ class BotHoster(BaseBot):
         menu += "<#FFFFFF>🔹 <#00FF00>!mybots     <#FFFFFF>- Ver tus bots alojados\n"
         menu += "<#FFFFFF>🔹 <#00FF00>!restart    <#FFFFFF>- Reiniciar bot\n"
         menu += "<#FFFFFF>🔹 <#00FF00>!mover <sala><#FFFFFF>- Cambiar sala del bot\n"
+        menu += "<#FFFFFF>🔹 <#E74C3C>!delete     <#FFFFFF>- Eliminar un bot\n"
         menu += "<#FFFFFF>🔹 <#00FF00>!soporte <msg><#FFFFFF>- Enviar ticket al admin\n"
         menu += "<#FFFFFF>🔹 <#00FF00>!gift <id> <monto><#FFFFFF>- Regalar saldo\n"
         menu += "<#FFFFFF>🔹 <#00FF00>!lang host <es/en/pt><#FFFFFF>- Idioma del sistema\n"
@@ -584,6 +586,42 @@ class BotHoster(BaseBot):
                         "<#E74C3C>❌ Error crítico al desplegar. Verifica token y Room ID.")
                 return
 
+        # ── Flujo de confirmación: !delete ───────────────────────────
+        if user_id in delete_sessions:
+            session = delete_sessions[user_id]
+            resp = text.lower().strip()
+            if resp in ["aceptar", "si", "sí", "yes"]:
+                del delete_sessions[user_id]
+                bot_id  = session["bot_id"]
+                cat     = session["cat"]
+                pos     = session["pos"]
+                # Matar proceso si está corriendo
+                proc = running_processes.pop(bot_id, None)
+                if proc and proc.poll() is None:
+                    proc.terminate()
+                # Eliminar directorio de la instancia
+                instance_path = os.path.join(
+                    HOSTED_INSTANCES_DIR, f"user_{user_id}_{cat.lower()}")
+                if os.path.exists(instance_path):
+                    shutil.rmtree(instance_path)
+                # Marcar como cancelado en DB
+                db.delete_bot(bot_id)
+                await self.highrise.send_message(conversation_id,
+                    f"<#2ECC71>✅ BOT ELIMINADO\n\n"
+                    f"<#FFFFFF>├── <#85E3FF>Posición <#FFFFFF>: <#00FFFF>#{pos}\n"
+                    f"<#FFFFFF>└── <#85E3FF>Tipo     <#FFFFFF>: <#FF69B4>{cat.upper()}\n\n"
+                    f"<#AAAAAA>Tu bot ha sido detenido y eliminado permanentemente.\n"
+                    f"{DIVIDER}")
+            elif resp in ["cancelar", "no", "cancel"]:
+                del delete_sessions[user_id]
+                await self.highrise.send_message(conversation_id,
+                    "<#AAAAAA>🚫 Eliminación cancelada. Tu bot sigue activo.")
+            else:
+                await self.highrise.send_message(conversation_id,
+                    "<#FFFFFF>Escribe <#2ECC71>aceptar <#FFFFFF>para confirmar "
+                    "o <#E74C3C>cancelar <#FFFFFF>para abortar.")
+            return
+
         # ─────────────────────────────────────────────────────────────
         # COMANDOS PRINCIPALES
         # ─────────────────────────────────────────────────────────────
@@ -611,6 +649,9 @@ class BotHoster(BaseBot):
 
         elif cmd == "!mybots":
             await self._handle_mybots(user_id, conversation_id)
+
+        elif cmd == "!delete":
+            await self._handle_delete(user_id, conversation_id, parts)
 
         elif cmd == "!mover":
             await self._handle_mover(user_id, conversation_id, parts)
@@ -865,6 +906,53 @@ class BotHoster(BaseBot):
                 f"{lines}\n"
                 f"<#2ECC71>👉 Usa: <#FFFFFF>!restart <número> <#AAAAAA>o <#FFFFFF>!mover <número> <room_id>\n"
                 f"{DIVIDER}")
+
+    # ── !delete ───────────────────────────────────────────────────────
+    async def _handle_delete(self, user_id: str, conversation_id: str, parts: list) -> None:
+        user_bots = db.get_user_bots(user_id)
+        if not user_bots:
+            await self.highrise.send_message(conversation_id,
+                "<#AAAAAA>ℹ️ No tienes ningún bot alojado para eliminar.")
+            return
+
+        # Seleccionar bot a eliminar
+        if len(user_bots) == 1:
+            b_id, r_id, st, cat, exp = user_bots[0]
+            pos = 1
+        else:
+            # Necesita número de posición
+            if len(parts) < 2 or not parts[1].isdigit():
+                lines = ""
+                for i, (b_id, r_id, st, cat, exp) in enumerate(user_bots, 1):
+                    time_left = format_time_remaining(exp)
+                    lines += (f"<#00FFFF>[{i}] <#FF69B4>{cat.capitalize()}  "
+                              f"<#FFFFFF>│ Sala: <#85E3FF>{r_id} "
+                              f"<#FFFFFF>│ Expira: <#FFD700>{time_left}\n")
+                await self.highrise.send_message(conversation_id,
+                    f"<#FFD700>🗑️ ¿Cuál bot deseas eliminar?\n\n"
+                    f"{lines}\n"
+                    f"<#FFFFFF>Usa: <#E74C3C>!delete <número>")
+                return
+            idx = int(parts[1]) - 1
+            if idx < 0 or idx >= len(user_bots):
+                await self.highrise.send_message(conversation_id,
+                    f"<#E74C3C>❌ Número inválido. Tienes <#00FFFF>{len(user_bots)} <#FFFFFF>bot(s).")
+                return
+            b_id, r_id, st, cat, exp = user_bots[idx]
+            pos = idx + 1
+
+        time_left = format_time_remaining(exp)
+        delete_sessions[user_id] = {"bot_id": b_id, "cat": cat, "pos": pos}
+        await self.highrise.send_message(conversation_id,
+            f"<#E74C3C>⚠️ ADVERTENCIA — ELIMINACIÓN PERMANENTE\n\n"
+            f"<#FFFFFF>├── <#85E3FF>Posición   <#FFFFFF>: <#00FFFF>#{pos}\n"
+            f"<#FFFFFF>├── <#85E3FF>Tipo       <#FFFFFF>: <#FF69B4>{cat.upper()}\n"
+            f"<#FFFFFF>├── <#85E3FF>Sala       <#FFFFFF>: <#AAAAAA>{r_id}\n"
+            f"<#FFFFFF>└── <#85E3FF>Expira en  <#FFFFFF>: <#FFD700>{time_left}\n\n"
+            f"<#E74C3C>❗ Esta acción detendrá y eliminará el bot de forma permanente.\n"
+            f"<#FFFFFF>No podrás recuperarlo ni se te reembolsará el saldo.\n\n"
+            f"<#2ECC71>✍️ Escribe <#FFFFFF>aceptar <#2ECC71>para confirmar "
+            f"o <#E74C3C>cancelar <#FFFFFF>para abortar.")
 
     # ── !mover ────────────────────────────────────────────────────────
     async def _handle_mover(self, user_id: str, conversation_id: str, parts: list) -> None:

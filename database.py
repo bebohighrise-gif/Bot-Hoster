@@ -491,6 +491,17 @@ def extend_bot_time(bot_id: int, duration_str: str):
     return new_exp_str
 
 
+def delete_bot(bot_id: int):
+    """Marca un bot como cancelado en la base de datos."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE hosted_bots SET status = 'cancelled' WHERE id = ?",
+        (bot_id,))
+    conn.commit()
+    conn.close()
+
+
 def update_bot_room(bot_id: int, new_room_id: str):
     conn = get_connection()
     cursor = conn.cursor()
