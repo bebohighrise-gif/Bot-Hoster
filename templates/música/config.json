@@ -1,0 +1,23 @@
+{
+  "room_id": "686c527e9668a3cb40e1f58d",
+  "api_token": "a2285eb48129e750ac17b9b7a2217d9bce6bf0ad5fe327f87174a5224ca1335d",
+  "admins": [
+    "669da7b73867bac51391c757",
+    "64dc252537db1cdb8e202d8d"
+  ],
+  "default_requests": 3,
+  "gold_required": 10,
+  "crossfade": 20,
+  "welcome_message": "👋 Bienvenido @user\n🤖 DJ automático activo\n🎶 Usa /play para pedir música",
+  "auto_messages": [
+    "🤖 DJ automático activo 🎧 Música continua",
+    "🎵 Usa /play para pedirme música",
+    "💰 Envía oro para obtener más pedidos"
+  ],
+  "spawn_position": {
+    "x": 15.5,
+    "y": 16.0,
+    "z": 2.5,
+    "facing": "FrontRight"
+  }
+}

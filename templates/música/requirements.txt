@@ -1,0 +1,14 @@
+pendulum>=2.1.2,<3.0.0
+highrise-bot-sdk==24.1.0
+tenacity>=5.1.5,<6.0.0
+Flask==3.0.2
+requests==2.31.0
+gunicorn==21.2.0
+pydub==0.25.1
+yt-dlp
+werkzeug>=3.0.0
+setuptools>=65.0.0
+wheel>=0.38.0
+numpy
+google-api-python-client
+google-auth
