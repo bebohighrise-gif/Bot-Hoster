@@ -1,7 +1,13 @@
-import os
+import subprocess
+import sys
 import json
+import os
+import threading
+import http.server
+import socketserver
 from datetime import datetime
 
+# ---------- GENERAR HTML (con .format() para evitar errores de sintaxis) ----------
 def generar_html():
     # Leer configuración
     try:
@@ -15,7 +21,7 @@ def generar_html():
     api_token = config.get("BOT_API_TOKEN", "No configurado")
     api_token_masked = api_token[:10] + "..." if len(api_token) > 10 else api_token
 
-    # Leer categorías
+    # Leer categorías desde templates/
     categories = []
     if os.path.isdir("templates"):
         for item in os.listdir("templates"):
@@ -24,7 +30,7 @@ def generar_html():
     else:
         categories = ["musica", "juegos", "fiesta", "personalizado"]
 
-    # Contar bots activos
+    # Contar bots activos (opcional)
     bots_count = "N/A"
     try:
         import sqlite3
@@ -39,16 +45,17 @@ def generar_html():
         pass
 
     render_port = os.environ.get("PORT", "8000")
+    now = datetime.now().strftime("%d/%m/%Y %H:%M")
 
-    # PRE-PROCESAR STRINGS DINÁMICOS (evita errores de f-strings anidados)
-    chips_html = ""
-    for cat in categories:
-        chips_html += f'<span class="time-chip"><i class="fas fa-check-circle" style="color: #7c3aed;"></i> {cat.capitalize()}</span>'
+    # Generar los chips de categorías
+    categories_chips = ''.join(
+        f'<span class="time-chip"><i class="fas fa-check-circle" style="color: #7c3aed;"></i> {cat.capitalize()}</span>'
+        for cat in categories
+    )
 
-    categories_text = ', '.join(categories) if categories else 'Ninguna'
-
-    # PLANTILLA HTML
-    html = f"""<!DOCTYPE html>
+    # Plantilla HTML (usamos {{ y }} para llaves literales, y {variable} para placeholders)
+    html_template = """
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8" />
@@ -158,7 +165,7 @@ def generar_html():
                 <h3>Bot Hoster</h3>
                 <p>Gestiona tus bots desde el inbox con comandos simples.</p>
                 <div style="margin-top: 1.5rem; display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap;">
-                    {chips_html}
+                    {categories_chips}
                 </div>
             </div>
         </div>
@@ -171,7 +178,7 @@ def generar_html():
                 <div class="info-item"><div class="label">Room ID</div><div class="value">{room_id}</div></div>
                 <div class="info-item"><div class="label">Owner ID</div><div class="value">{owner_id}</div></div>
                 <div class="info-item"><div class="label">API Token</div><div class="value">{api_token_masked}</div></div>
-                <div class="info-item"><div class="label">Categorías</div><div class="value">{categories_text}</div></div>
+                <div class="info-item"><div class="label">Categorías</div><div class="value">{', '.join(categories)}</div></div>
                 <div class="info-item"><div class="label">Puerto</div><div class="value">{render_port}</div></div>
             </div>
         </div>
@@ -259,18 +266,95 @@ python run.py</pre>
             <p class="section-subtitle">Sigue estos pasos para poner en marcha tu propio Bot Hoster.</p>
             <div class="install-steps">
                 <div class="step"><div class="step-num">1</div><h4>Clona el repositorio</h4><p>Estructura de carpetas lista con plantillas y configuración.</p><code>nex-host/</code></div>
-                <div class="step"><div class="step-num">2</div><h4>Instala dependencias</h4><p>Usa <code>pip install -r requirements.txt</code></p></div>
-                <div class="step"><div class="step-num">3</div><h4>Ejecuta el bot</h4><p>Inicia el servidor con <code>python run.py</code></p></div>
+             <div class="step"><div class="step-num">2</div><h4>Instala dependencias</h4><p>Usa <code>pip install -r requirements.txt</code></p></div>
+                <div class="step"><div class="step-num">3</div><h4>Configura <code>config.json</code></h4><p>Define <code>ROOM_ID</code>, <code>HOSTER_OWNER_ID</code> y <code>BOT_API_TOKEN</code>.</p></div>
+                <div class="step"><div class="step-num">4</div><h4>Ejecuta</h4><p><code>python run.py</code> y tu bot hoster estará activo.</p></div>
+            </div>
+            <div style="text-align: center; margin-top: 2.5rem;">
+                <a href="#" class="btn-glow"><i class="fab fa-github"></i> Ver en GitHub</a>
             </div>
         </div>
     </section>
 
     <footer>
         <div class="container">
-            <p>&copy; Nex-Host. Todos los derechos reservados.</p>
+            <div class="social">
+                <a href="#"><i class="fab fa-github"></i></a>
+                <a href="#"><i class="fab fa-discord"></i></a>
+                <a href="#"><i class="fab fa-twitter"></i></a>
+            </div>
+            <p>Nex-Host · Bot Hoster para Highrise &mdash; 2026</p>
+            <p style="font-size: 0.85rem; margin-top: 0.5rem;">
+                <i class="fas fa-code"></i> con <i class="fas fa-heart" style="color: #7c3aed;"></i> para la comunidad
+                <br><small>Generado automáticamente el {now}</small>
+            </p>
         </div>
     </footer>
 </body>
-</html>"""
+</html>
+    """
 
+    # Reemplazar placeholders
+    html = html_template.format(
+        room_id=room_id,
+        owner_id=owner_id,
+        api_token_masked=api_token_masked,
+        categories=categories,
+        categories_chips=categories_chips,
+        bots_count=bots_count,
+        render_port=render_port,
+        now=now
+    )
     return html
+
+# ---------- SERVIDOR WEB ----------
+class WebHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/":
+            html = generar_html()
+            self.send_response(200)
+            self.send_header("Content-type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(html.encode("utf-8"))
+        else:
+            self.send_response(404)
+            self.send_header("Content-type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"404 - Ruta no encontrada. Solo '/' disponible.")
+
+def start_web_server():
+    port = int(os.environ.get("PORT", 8000))
+    socketserver.TCPServer.allow_reuse_address = True
+    with socketserver.TCPServer(("0.0.0.0", port), WebHandler) as httpd:
+        print(f"🌐 Servidor web corriendo en http://0.0.0.0:{port}/")
+        print(f"📄 La web se genera en tiempo real desde el código.")
+        httpd.serve_forever()
+
+# ---------- EJECUTAR EL BOT DE HIGHRISE ----------
+def run_bot():
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            config = json.load(f)
+    except FileNotFoundError:
+        print("❌ No se encontró config.json")
+        sys.exit(1)
+
+    room_id = config.get("ROOM_ID")
+    api_token = config.get("BOT_API_TOKEN")
+
+    if not room_id or not api_token:
+        print("❌ Faltan ROOM_ID o BOT_API_TOKEN en config.json")
+        sys.exit(1)
+
+    print("🤖 Iniciando el bot de Highrise...")
+    subprocess.run(
+        [sys.executable, "-m", "highrise", "main:BotHoster", room_id, api_token],
+        check=True
+    )
+
+# ---------- PUNTO DE ENTRADA ----------
+if __name__ == "__main__":
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    start_web_server()
+```
