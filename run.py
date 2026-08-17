@@ -1,13 +1,7 @@
-import subprocess
-import sys
-import json
 import os
-import threading
-import http.server
-import socketserver
+import json
 from datetime import datetime
 
-# ---------- GENERAR HTML DINÁMICAMENTE (en memoria) ----------
 def generar_html():
     # Leer configuración
     try:
@@ -21,7 +15,7 @@ def generar_html():
     api_token = config.get("BOT_API_TOKEN", "No configurado")
     api_token_masked = api_token[:10] + "..." if len(api_token) > 10 else api_token
 
-    # Leer categorías desde templates/
+    # Leer categorías
     categories = []
     if os.path.isdir("templates"):
         for item in os.listdir("templates"):
@@ -30,7 +24,7 @@ def generar_html():
     else:
         categories = ["musica", "juegos", "fiesta", "personalizado"]
 
-    # Contar bots activos (opcional)
+    # Contar bots activos
     bots_count = "N/A"
     try:
         import sqlite3
@@ -45,9 +39,15 @@ def generar_html():
         pass
 
     render_port = os.environ.get("PORT", "8000")
-    now = datetime.now().strftime("%d/%m/%Y %H:%M")
 
-    # PLANTILLA HTML COMPLETA (incrustada aquí)
+    # PRE-PROCESAR STRINGS DINÁMICOS (evita errores de f-strings anidados)
+    chips_html = ""
+    for cat in categories:
+        chips_html += f'<span class="time-chip"><i class="fas fa-check-circle" style="color: #7c3aed;"></i> {cat.capitalize()}</span>'
+
+    categories_text = ', '.join(categories) if categories else 'Ninguna'
+
+    # PLANTILLA HTML
     html = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -158,7 +158,7 @@ def generar_html():
                 <h3>Bot Hoster</h3>
                 <p>Gestiona tus bots desde el inbox con comandos simples.</p>
                 <div style="margin-top: 1.5rem; display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap;">
-                    {''.join(f'<span class="time-chip"><i class="fas fa-check-circle" style="color: #7c3aed;"></i> {cat.capitalize()}</span>' for cat in categories)}
+                    {chips_html}
                 </div>
             </div>
         </div>
@@ -171,7 +171,7 @@ def generar_html():
                 <div class="info-item"><div class="label">Room ID</div><div class="value">{room_id}</div></div>
                 <div class="info-item"><div class="label">Owner ID</div><div class="value">{owner_id}</div></div>
                 <div class="info-item"><div class="label">API Token</div><div class="value">{api_token_masked}</div></div>
-                <div class="info-item"><div class="label">Categorías</div><div class="value">{', '.join(categories) or 'Ninguna'}</div></div>
+                <div class="info-item"><div class="label">Categorías</div><div class="value">{categories_text}</div></div>
                 <div class="info-item"><div class="label">Puerto</div><div class="value">{render_port}</div></div>
             </div>
         </div>
@@ -260,7 +260,8 @@ python run.py</pre>
             <div class="install-steps">
                 <div class="step"><div class="step-num">1</div><h4>Clona el repositorio</h4><p>Estructura de carpetas lista con plantillas y configuración.</p><code>nex-host/</code></div>
                 <div class="step"><div class="step-num">2</div><h4>Instala dependencias</h4><p>Usa <code>pip install -r requirements.txt</code></p></div>
-                </div>
+                <div class="step"><div class="step-num">3</div><h4>Ejecuta el bot</h4><p>Inicia el servidor con <code>python run.py</code></p></div>
+            </div>
         </div>
     </section>
 
