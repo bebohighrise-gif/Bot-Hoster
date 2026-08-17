@@ -260,4 +260,16 @@ python run.py</pre>
             <div class="install-steps">
                 <div class="step"><div class="step-num">1</div><h4>Clona el repositorio</h4><p>Estructura de carpetas lista con plantillas y configuración.</p><code>nex-host/</code></div>
                 <div class="step"><div class="step-num">2</div><h4>Instala dependencias</h4><p>Usa <code>pip install -r requirements.txt</code></p></div>
-                <div 
+                </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>&copy; Nex-Host. Todos los derechos reservados.</p>
+        </div>
+    </footer>
+</body>
+</html>"""
+
+    return html
