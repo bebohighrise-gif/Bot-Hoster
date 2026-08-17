@@ -6,3 +6,4 @@ requests>=2.31.0
 flask
 gunicorn
 pendulum
+static-ffmpeg
