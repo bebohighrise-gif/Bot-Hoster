@@ -2981,10 +2981,43 @@ class Bot(BaseBot):
                 else:
                     await send_response("¡Error obteniendo posición del usuario!")
                     return
-                config = load_config()
+                # Guardar el punto sin reiniciar la sesión ni cambiar de sala.
+                # El runner solo lee config.json al arrancar un proceso nuevo,
+                # por eso también actualizamos el diccionario activo en memoria.
+                updated_config = load_config()
+                updated_config["spawn_point"] = spawn_point
+                with open("config.json", "w", encoding="utf-8") as f:
+                    json.dump(updated_config, f, indent=2, ensure_ascii=False)
                 config["spawn_point"] = spawn_point
-                with open("config.json", "w", encoding="utf-8") as f: json.dump(config, f, indent=2, ensure_ascii=False)
-                await send_response( f"📍 Punto de inicio del bot establecido en: X={spawn_point['x']}, Y={spawn_point['y']}, Z={spawn_point['z']}")
+
+                # El comando debe mover al bot dentro de la sala actual.
+                # No se llama a leave_room, disconnect ni a ninguna rutina de
+                # reconexión: guardar el spawn no requiere abandonar la sala.
+                try:
+                    if self.session_active and getattr(self, "bot_id", None):
+                        await self.highrise.teleport(
+                            self.bot_id,
+                            Position(spawn_point["x"], spawn_point["y"], spawn_point["z"]),
+                        )
+                        log_event("CONFIG", f"Spawn actualizado y bot movido dentro de la sala: {spawn_point}")
+                        await send_response(
+                            f"📍 Spawn guardado. Bot movido dentro de la sala a "
+                            f"X={spawn_point['x']}, Y={spawn_point['y']}, Z={spawn_point['z']}"
+                        )
+                    else:
+                        log_event("CONFIG", f"Spawn actualizado sin mover: sesión no activa ({spawn_point})")
+                        await send_response(
+                            f"📍 Punto de inicio guardado: X={spawn_point['x']}, "
+                            f"Y={spawn_point['y']}, Z={spawn_point['z']}"
+                        )
+                except Exception as e:
+                    # La configuración sigue guardada aunque el servidor no
+                    # acepte el teletransporte en ese instante.
+                    log_event("WARNING", f"Spawn guardado, pero no se pudo mover al bot: {e}")
+                    await send_response(
+                        f"📍 Spawn guardado, pero no pude mover al bot ahora. "
+                        f"Seguirá en la sala y usará este punto al volver a entrar."
+                    )
             else: await send_response("¡Error obteniendo posición del usuario!")
             return
 
