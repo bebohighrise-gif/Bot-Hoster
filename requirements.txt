@@ -7,3 +7,4 @@ flask
 gunicorn
 pendulum
 static-ffmpeg
+setuptools<82
